@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"bitbucker.org/kit-systems/dari/pkg/parser"
+	"bitbucket.org/kit-systems/dari/pkg/parser"
 )
 
 func main() {

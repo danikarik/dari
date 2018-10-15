@@ -1,4 +1,4 @@
-module bitbucker.org/kit-systems/dari
+module bitbucket.org/kit-systems/dari
 
 require (
 	github.com/uber-go/zap v1.9.1
