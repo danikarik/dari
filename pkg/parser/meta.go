@@ -12,8 +12,3 @@ type Meta struct {
 type Row struct {
 	ID string `xml:"id,attr"`
 }
-
-// EmptyMeta returns new meta instance.
-func EmptyMeta() *Meta {
-	return &Meta{}
-}

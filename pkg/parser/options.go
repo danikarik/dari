@@ -10,6 +10,7 @@ import (
 type Options struct {
 	Logger *zap.Logger
 	Debug  bool
+	Limit  uint
 }
 
 // Pages is a configuration for dari.kz urls to be parsed.
@@ -18,7 +19,6 @@ type Pages struct {
 	Registry string
 	Grid     string
 	Print    string
-	Count    int
 }
 
 // DefaultLogger returns basic logger instance.
@@ -33,7 +33,6 @@ func DefaultPages() *Pages {
 		Registry: "/reestr/lang/ru",
 		Grid:     "/getReestr",
 		Print:    "/print/",
-		Count:    0,
 	}
 }
 

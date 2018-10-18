@@ -10,4 +10,10 @@ build: ## Build binaries
 
 run: ## Run parser
 	@echo 'Starting parser...'
-	@bin/parser
+	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --limit=1
+
+dump: ## Dump database models
+	@sqlboiler -o pkg/models -p models --wipe mysql
+
+test-models: ## Test generated models
+	bash -c "cd pkg/models && go test --test.config=../../sqlboiler.yml ./pkg/models && cd ../../"

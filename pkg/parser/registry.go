@@ -46,21 +46,33 @@ const (
 	Model = 2
 )
 
+// Status specifies result of action.
+type Status int
+
+const (
+	scraped Status = iota
+	failed
+	added
+	updated
+	deleted
+)
+
 // Registry refers to "reestr" from dari.kz.
 type Registry struct {
 	Number        string
 	IssueDate     time.Time
 	ExpireDate    time.Time
 	Duration      int
-	Name          string
+	Title         string
 	Link          string
 	Manufacturers []Manufacturer
 	Builds        []Build
+	Status        Status
 }
 
 // Manufacturer contains information about manufacturer.
 type Manufacturer struct {
-	Name    string
+	Title   string
 	Country string
 	Type    string
 }
@@ -68,6 +80,6 @@ type Manufacturer struct {
 // Build contains information about equipment part.
 type Build struct {
 	Order int
-	Name  string
+	Title string
 	Model string
 }
