@@ -3,9 +3,12 @@ package database
 import (
 	"context"
 	"database/sql"
+	"time"
 
+	"bitbucket.org/kit-systems/dari/pkg/dict"
 	"bitbucket.org/kit-systems/dari/pkg/models"
 	"github.com/hashicorp/go-multierror"
+	"github.com/oklog/run"
 	"github.com/volatiletech/sqlboiler/boil"
 )
 
@@ -38,31 +41,83 @@ func (db *DB) GetRegistryBuild(r *models.Registry) (models.RegistryBuildSlice, e
 	return r.RegistryBuilds().All(db.ctx, db.conn)
 }
 
+// MarkAsProcessing updates status field for all records
+// except those are marked as parsing failed.
+func (db *DB) MarkAsProcessing(regs models.RegistrySlice) error {
+	tx, err := db.conn.BeginTx(db.ctx, nil)
+	if err != nil {
+		return err
+	}
+	_, err = models.Registries().UpdateAll(db.ctx, db.conn, models.M{
+		"registry_status_id": uint(dict.Processing),
+		"updated_at":         time.Now(),
+	})
+	if err != nil {
+		return tx.Rollback()
+	}
+	return tx.Commit()
+}
+
+// MarkAsDeleted updates status field for all records.
+func (db *DB) MarkAsDeleted(regs models.RegistrySlice) error {
+	tx, err := db.conn.BeginTx(db.ctx, nil)
+	if err != nil {
+		return err
+	}
+	_, err = models.Registries().UpdateAll(db.ctx, db.conn, models.M{
+		"registry_status_id": uint(dict.Deleted),
+		"updated_at":         time.Now(),
+	})
+	if err != nil {
+		return tx.Rollback()
+	}
+	return tx.Commit()
+}
+
 // AddRegistry inserts registry into database.
 func (db *DB) AddRegistry(r *models.Registry) error {
 	tx, err := db.conn.BeginTx(db.ctx, nil)
 	if err != nil {
 		return err
 	}
-	err = r.Insert(db.ctx, db.conn, boil.Infer())
+	err = r.Upsert(db.ctx, db.conn, boil.Blacklist("created_at"), boil.Infer())
 	if err != nil {
 		return err
 	}
-	for _, m := range r.R.RegistryManufacturers {
-		m.RegistryID = r.ID
-		terr := m.Insert(db.ctx, db.conn, boil.Infer())
-		if terr != nil {
-			err = multierror.Append(err, terr)
-		}
+	var g run.Group
+	{
+		g.Add(func() error {
+			_, err := r.RegistryManufacturers().DeleteAll(db.ctx, db.conn)
+			if err != nil {
+				return err
+			}
+			for _, m := range r.R.RegistryManufacturers {
+				m.RegistryID = r.ID
+				terr := m.Insert(db.ctx, db.conn, boil.Infer())
+				if terr != nil {
+					err = multierror.Append(err, terr)
+					break
+				}
+			}
+			return err
+		}, func(error) {})
+		g.Add(func() error {
+			_, err := r.RegistryBuilds().DeleteAll(db.ctx, db.conn)
+			if err != nil {
+				return err
+			}
+			for _, b := range r.R.RegistryBuilds {
+				b.RegistryID = r.ID
+				terr := b.Insert(db.ctx, db.conn, boil.Infer())
+				if terr != nil {
+					err = multierror.Append(err, terr)
+					break
+				}
+			}
+			return err
+		}, func(error) {})
 	}
-	for _, b := range r.R.RegistryBuilds {
-		b.RegistryID = r.ID
-		terr := b.Insert(db.ctx, db.conn, boil.Infer())
-		if terr != nil {
-			err = multierror.Append(err, terr)
-		}
-	}
-	if err != nil {
+	if err = g.Run(); err != nil {
 		return tx.Rollback()
 	}
 	return tx.Commit()

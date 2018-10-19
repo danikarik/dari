@@ -23,54 +23,63 @@ import (
 
 // Registry is an object representing the database table.
 type Registry struct {
-	ID         uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	Title      string    `boil:"title" json:"title" toml:"title" yaml:"title"`
-	Number     string    `boil:"number" json:"number" toml:"number" yaml:"number"`
-	IssueDate  time.Time `boil:"issue_date" json:"issue_date" toml:"issue_date" yaml:"issue_date"`
-	ExpireDate time.Time `boil:"expire_date" json:"expire_date" toml:"expire_date" yaml:"expire_date"`
-	Duration   int       `boil:"duration" json:"duration" toml:"duration" yaml:"duration"`
-	Link       string    `boil:"link" json:"link" toml:"link" yaml:"link"`
-	CreatedAt  null.Time `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	UpdatedAt  null.Time `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	ID               uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Title            string    `boil:"title" json:"title" toml:"title" yaml:"title"`
+	Number           string    `boil:"number" json:"number" toml:"number" yaml:"number"`
+	IssueDate        time.Time `boil:"issue_date" json:"issue_date" toml:"issue_date" yaml:"issue_date"`
+	ExpireDate       time.Time `boil:"expire_date" json:"expire_date" toml:"expire_date" yaml:"expire_date"`
+	Duration         int       `boil:"duration" json:"duration" toml:"duration" yaml:"duration"`
+	Link             string    `boil:"link" json:"link" toml:"link" yaml:"link"`
+	RegistryStatusID uint      `boil:"registry_status_id" json:"registry_status_id" toml:"registry_status_id" yaml:"registry_status_id"`
+	CreatedAt        null.Time `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	UpdatedAt        null.Time `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
 	R *registryR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L registryL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var RegistryColumns = struct {
-	ID         string
-	Title      string
-	Number     string
-	IssueDate  string
-	ExpireDate string
-	Duration   string
-	Link       string
-	CreatedAt  string
-	UpdatedAt  string
+	ID               string
+	Title            string
+	Number           string
+	IssueDate        string
+	ExpireDate       string
+	Duration         string
+	Link             string
+	RegistryStatusID string
+	CreatedAt        string
+	UpdatedAt        string
 }{
-	ID:         "id",
-	Title:      "title",
-	Number:     "number",
-	IssueDate:  "issue_date",
-	ExpireDate: "expire_date",
-	Duration:   "duration",
-	Link:       "link",
-	CreatedAt:  "created_at",
-	UpdatedAt:  "updated_at",
+	ID:               "id",
+	Title:            "title",
+	Number:           "number",
+	IssueDate:        "issue_date",
+	ExpireDate:       "expire_date",
+	Duration:         "duration",
+	Link:             "link",
+	RegistryStatusID: "registry_status_id",
+	CreatedAt:        "created_at",
+	UpdatedAt:        "updated_at",
 }
 
 // RegistryRels is where relationship names are stored.
 var RegistryRels = struct {
+	RegistryStatus        string
 	RegistryBuilds        string
+	RegistryFieldStats    string
 	RegistryManufacturers string
 }{
+	RegistryStatus:        "RegistryStatus",
 	RegistryBuilds:        "RegistryBuilds",
+	RegistryFieldStats:    "RegistryFieldStats",
 	RegistryManufacturers: "RegistryManufacturers",
 }
 
 // registryR is where relationships are stored.
 type registryR struct {
+	RegistryStatus        *RegistryStatus
 	RegistryBuilds        RegistryBuildSlice
+	RegistryFieldStats    RegistryFieldStatSlice
 	RegistryManufacturers RegistryManufacturerSlice
 }
 
@@ -83,8 +92,8 @@ func (*registryR) NewStruct() *registryR {
 type registryL struct{}
 
 var (
-	registryColumns               = []string{"id", "title", "number", "issue_date", "expire_date", "duration", "link", "created_at", "updated_at"}
-	registryColumnsWithoutDefault = []string{"id", "title", "number", "duration", "link", "created_at", "updated_at"}
+	registryColumns               = []string{"id", "title", "number", "issue_date", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
+	registryColumnsWithoutDefault = []string{"id", "title", "number", "duration", "link", "registry_status_id", "created_at", "updated_at"}
 	registryColumnsWithDefault    = []string{"issue_date", "expire_date"}
 	registryPrimaryKeyColumns     = []string{"id"}
 )
@@ -324,6 +333,20 @@ func (q registryQuery) Exists(ctx context.Context, exec boil.ContextExecutor) (b
 	return count > 0, nil
 }
 
+// RegistryStatus pointed to by the foreign key.
+func (o *Registry) RegistryStatus(mods ...qm.QueryMod) registryStatusQuery {
+	queryMods := []qm.QueryMod{
+		qm.Where("id=?", o.RegistryStatusID),
+	}
+
+	queryMods = append(queryMods, mods...)
+
+	query := RegistryStatuses(queryMods...)
+	queries.SetFrom(query.Query, "`registry_statuses`")
+
+	return query
+}
+
 // RegistryBuilds retrieves all the registry_build's RegistryBuilds with an executor.
 func (o *Registry) RegistryBuilds(mods ...qm.QueryMod) registryBuildQuery {
 	var queryMods []qm.QueryMod
@@ -340,6 +363,27 @@ func (o *Registry) RegistryBuilds(mods ...qm.QueryMod) registryBuildQuery {
 
 	if len(queries.GetSelect(query.Query)) == 0 {
 		queries.SetSelect(query.Query, []string{"`registry_builds`.*"})
+	}
+
+	return query
+}
+
+// RegistryFieldStats retrieves all the registry_field_stat's RegistryFieldStats with an executor.
+func (o *Registry) RegistryFieldStats(mods ...qm.QueryMod) registryFieldStatQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`registry_field_stats`.`registry_id`=?", o.ID),
+	)
+
+	query := RegistryFieldStats(queryMods...)
+	queries.SetFrom(query.Query, "`registry_field_stats`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`registry_field_stats`.*"})
 	}
 
 	return query
@@ -364,6 +408,101 @@ func (o *Registry) RegistryManufacturers(mods ...qm.QueryMod) registryManufactur
 	}
 
 	return query
+}
+
+// LoadRegistryStatus allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for an N-1 relationship.
+func (registryL) LoadRegistryStatus(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistry interface{}, mods queries.Applicator) error {
+	var slice []*Registry
+	var object *Registry
+
+	if singular {
+		object = maybeRegistry.(*Registry)
+	} else {
+		slice = *maybeRegistry.(*[]*Registry)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryR{}
+		}
+		args = append(args, object.RegistryStatusID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryR{}
+			}
+
+			for _, a := range args {
+				if a == obj.RegistryStatusID {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.RegistryStatusID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registry_statuses`), qm.WhereIn(`id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load RegistryStatus")
+	}
+
+	var resultSlice []*RegistryStatus
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice RegistryStatus")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results of eager load for registry_statuses")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registry_statuses")
+	}
+
+	if len(registryAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(resultSlice) == 0 {
+		return nil
+	}
+
+	if singular {
+		foreign := resultSlice[0]
+		object.R.RegistryStatus = foreign
+		if foreign.R == nil {
+			foreign.R = &registryStatusR{}
+		}
+		foreign.R.Registries = append(foreign.R.Registries, object)
+		return nil
+	}
+
+	for _, local := range slice {
+		for _, foreign := range resultSlice {
+			if local.RegistryStatusID == foreign.ID {
+				local.R.RegistryStatus = foreign
+				if foreign.R == nil {
+					foreign.R = &registryStatusR{}
+				}
+				foreign.R.Registries = append(foreign.R.Registries, local)
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadRegistryBuilds allows an eager lookup of values, cached into the
@@ -447,6 +586,97 @@ func (registryL) LoadRegistryBuilds(ctx context.Context, e boil.ContextExecutor,
 				local.R.RegistryBuilds = append(local.R.RegistryBuilds, foreign)
 				if foreign.R == nil {
 					foreign.R = &registryBuildR{}
+				}
+				foreign.R.Registry = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadRegistryFieldStats allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (registryL) LoadRegistryFieldStats(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistry interface{}, mods queries.Applicator) error {
+	var slice []*Registry
+	var object *Registry
+
+	if singular {
+		object = maybeRegistry.(*Registry)
+	} else {
+		slice = *maybeRegistry.(*[]*Registry)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.ID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registry_field_stats`), qm.WhereIn(`registry_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load registry_field_stats")
+	}
+
+	var resultSlice []*RegistryFieldStat
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice registry_field_stats")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on registry_field_stats")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registry_field_stats")
+	}
+
+	if len(registryFieldStatAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.RegistryFieldStats = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &registryFieldStatR{}
+			}
+			foreign.R.Registry = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if queries.Equal(local.ID, foreign.RegistryID) {
+				local.R.RegistryFieldStats = append(local.R.RegistryFieldStats, foreign)
+				if foreign.R == nil {
+					foreign.R = &registryFieldStatR{}
 				}
 				foreign.R.Registry = local
 				break
@@ -548,6 +778,53 @@ func (registryL) LoadRegistryManufacturers(ctx context.Context, e boil.ContextEx
 	return nil
 }
 
+// SetRegistryStatus of the registry to the related item.
+// Sets o.R.RegistryStatus to related.
+// Adds o to related.R.Registries.
+func (o *Registry) SetRegistryStatus(ctx context.Context, exec boil.ContextExecutor, insert bool, related *RegistryStatus) error {
+	var err error
+	if insert {
+		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
+			return errors.Wrap(err, "failed to insert into foreign table")
+		}
+	}
+
+	updateQuery := fmt.Sprintf(
+		"UPDATE `registries` SET %s WHERE %s",
+		strmangle.SetParamNames("`", "`", 0, []string{"registry_status_id"}),
+		strmangle.WhereClause("`", "`", 0, registryPrimaryKeyColumns),
+	)
+	values := []interface{}{related.ID, o.ID}
+
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, updateQuery)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	o.RegistryStatusID = related.ID
+	if o.R == nil {
+		o.R = &registryR{
+			RegistryStatus: related,
+		}
+	} else {
+		o.R.RegistryStatus = related
+	}
+
+	if related.R == nil {
+		related.R = &registryStatusR{
+			Registries: RegistrySlice{o},
+		}
+	} else {
+		related.R.Registries = append(related.R.Registries, o)
+	}
+
+	return nil
+}
+
 // AddRegistryBuilds adds the given related objects to the existing relationships
 // of the registry, optionally inserting them as new records.
 // Appends related to o.R.RegistryBuilds.
@@ -598,6 +875,129 @@ func (o *Registry) AddRegistryBuilds(ctx context.Context, exec boil.ContextExecu
 			rel.R.Registry = o
 		}
 	}
+	return nil
+}
+
+// AddRegistryFieldStats adds the given related objects to the existing relationships
+// of the registry, optionally inserting them as new records.
+// Appends related to o.R.RegistryFieldStats.
+// Sets related.R.Registry appropriately.
+func (o *Registry) AddRegistryFieldStats(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryFieldStat) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			queries.Assign(&rel.RegistryID, o.ID)
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `registry_field_stats` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"registry_id"}),
+				strmangle.WhereClause("`", "`", 0, registryFieldStatPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			queries.Assign(&rel.RegistryID, o.ID)
+		}
+	}
+
+	if o.R == nil {
+		o.R = &registryR{
+			RegistryFieldStats: related,
+		}
+	} else {
+		o.R.RegistryFieldStats = append(o.R.RegistryFieldStats, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &registryFieldStatR{
+				Registry: o,
+			}
+		} else {
+			rel.R.Registry = o
+		}
+	}
+	return nil
+}
+
+// SetRegistryFieldStats removes all previously related items of the
+// registry replacing them completely with the passed
+// in related items, optionally inserting them as new records.
+// Sets o.R.Registry's RegistryFieldStats accordingly.
+// Replaces o.R.RegistryFieldStats with related.
+// Sets related.R.Registry's RegistryFieldStats accordingly.
+func (o *Registry) SetRegistryFieldStats(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryFieldStat) error {
+	query := "update `registry_field_stats` set `registry_id` = null where `registry_id` = ?"
+	values := []interface{}{o.ID}
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, query)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	_, err := exec.ExecContext(ctx, query, values...)
+	if err != nil {
+		return errors.Wrap(err, "failed to remove relationships before set")
+	}
+
+	if o.R != nil {
+		for _, rel := range o.R.RegistryFieldStats {
+			queries.SetScanner(&rel.RegistryID, nil)
+			if rel.R == nil {
+				continue
+			}
+
+			rel.R.Registry = nil
+		}
+
+		o.R.RegistryFieldStats = nil
+	}
+	return o.AddRegistryFieldStats(ctx, exec, insert, related...)
+}
+
+// RemoveRegistryFieldStats relationships from objects passed in.
+// Removes related items from R.RegistryFieldStats (uses pointer comparison, removal does not keep order)
+// Sets related.R.Registry.
+func (o *Registry) RemoveRegistryFieldStats(ctx context.Context, exec boil.ContextExecutor, related ...*RegistryFieldStat) error {
+	var err error
+	for _, rel := range related {
+		queries.SetScanner(&rel.RegistryID, nil)
+		if rel.R != nil {
+			rel.R.Registry = nil
+		}
+		if _, err = rel.Update(ctx, exec, boil.Whitelist("registry_id")); err != nil {
+			return err
+		}
+	}
+	if o.R == nil {
+		return nil
+	}
+
+	for _, rel := range related {
+		for i, ri := range o.R.RegistryFieldStats {
+			if rel != ri {
+				continue
+			}
+
+			ln := len(o.R.RegistryFieldStats)
+			if ln > 1 && i < ln-1 {
+				o.R.RegistryFieldStats[i] = o.R.RegistryFieldStats[ln-1]
+			}
+			o.R.RegistryFieldStats = o.R.RegistryFieldStats[:ln-1]
+			break
+		}
+	}
+
 	return nil
 }
 

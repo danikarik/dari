@@ -1,6 +1,4 @@
-package parser
-
-import "time"
+package dict
 
 const (
 	// MainTableIndex refers to "Основные данные"
@@ -50,36 +48,17 @@ const (
 type Status int
 
 const (
-	scraped Status = iota
-	failed
-	added
-	updated
-	deleted
+	_ = iota
+	// Processing means "В обработке"
+	Processing Status = iota
+	// Failed means "Ошибка при записи"
+	Failed
+	// Inserted means "Новая запись"
+	Inserted
+	// Updated means "Запись обновлена"
+	Updated
+	// Deleted means "Запись удалена из реестра"
+	Deleted
+	// ParsingFailed means "Ошибка при чтении веб-страницы"
+	ParsingFailed
 )
-
-// Registry refers to "reestr" from dari.kz.
-type Registry struct {
-	Number        string
-	IssueDate     time.Time
-	ExpireDate    time.Time
-	Duration      int
-	Title         string
-	Link          string
-	Manufacturers []Manufacturer
-	Builds        []Build
-	Status        Status
-}
-
-// Manufacturer contains information about manufacturer.
-type Manufacturer struct {
-	Title   string
-	Country string
-	Type    string
-}
-
-// Build contains information about equipment part.
-type Build struct {
-	Order int
-	Title string
-	Model string
-}

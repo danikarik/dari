@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"bitbucket.org/kit-systems/dari/pkg/database"
+	"bitbucket.org/kit-systems/dari/pkg/dict"
 	"bitbucket.org/kit-systems/dari/pkg/models"
 	"bitbucket.org/kit-systems/dari/pkg/urlhelper"
 	"github.com/gocolly/colly"
@@ -27,6 +28,7 @@ type Parser struct {
 	meta      *Meta
 	regs      models.RegistrySlice
 	bar       *pb.ProgressBar
+	journal   *models.RegistryJournal
 }
 
 // New creates new parser instance.
@@ -48,6 +50,7 @@ func New(db *database.DB, opts Options) (*Parser, error) {
 	p.meta = &Meta{}
 	p.regs = make(models.RegistrySlice, 0)
 	p.db = db
+	p.journal = &models.RegistryJournal{}
 	return &p, nil
 }
 
@@ -184,9 +187,8 @@ func (p *Parser) collectRecords() error {
 	for _, r := range p.meta.Rows {
 		rec, err := p.visitPrint(r.ID)
 		p.incrementBar()
-		// if err != nil || rec.Status == failed {
 		if err != nil {
-			errors++
+			rec.RegistryStatusID = uint(dict.ParsingFailed)
 			p.logger.Error(
 				"registry",
 				zap.String("link", rec.Link),
@@ -220,6 +222,7 @@ func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
 	}
 	var r models.Registry
 	r.ID = uint(rowid)
+	r.RegistryStatusID = uint(dict.Processing)
 	if err != nil {
 		return nil, err
 	}
@@ -233,11 +236,6 @@ func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
 		err = parsePage(&r, e)
 	})
 	c.OnScraped(func(resp *colly.Response) {
-		// if err != nil {
-		// 	r.Status = failed
-		// } else {
-		// 	r.Status = scraped
-		// }
 		p.addRegistry(&r)
 	})
 	return &r, c.Visit(url)
@@ -247,19 +245,19 @@ func parsePage(r *models.Registry, e *colly.HTMLElement) error {
 	var g run.Group
 	e.ForEach("table", func(i int, el *colly.HTMLElement) {
 		// Основные данные
-		if i == MainTableIndex {
+		if i == dict.MainTableIndex {
 			g.Add(func() error {
 				return parseMainTable(r, el)
 			}, func(err error) {})
 		}
 		// Производители
-		if i == ManufacturesTableIndex {
+		if i == dict.ManufacturesTableIndex {
 			g.Add(func() error {
 				return parseManufacturesTable(r, el)
 			}, func(err error) {})
 		}
 		// Комплектность
-		if i == PartsTableIndex {
+		if i == dict.PartsTableIndex {
 			g.Add(func() error {
 				return parsePartsTable(r, el)
 			}, func(err error) {})
@@ -272,13 +270,13 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 	var result error
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
 		switch j {
-		case RegistryName:
+		case dict.RegistryName:
 			r.Title = ch.ChildText("td")
 			break
-		case RegistryNumber:
+		case dict.RegistryNumber:
 			r.Number = ch.ChildText("td")
 			break
-		case IssueDate:
+		case dict.IssueDate:
 			dt, err := time.Parse("02.01.2006", ch.ChildText("td"))
 			if err != nil {
 				result = multierror.Append(result, err)
@@ -286,7 +284,7 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 			}
 			r.IssueDate = dt
 			break
-		case RegistryDuration:
+		case dict.RegistryDuration:
 			d, err := strconv.Atoi(ch.ChildText("td"))
 			if err != nil {
 				result = multierror.Append(result, err)
@@ -294,7 +292,7 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 			}
 			r.Duration = d
 			break
-		case ExpireDate:
+		case dict.ExpireDate:
 			dt, err := time.Parse("02.01.2006", ch.ChildText("td"))
 			if err != nil {
 				result = multierror.Append(result, err)
@@ -314,24 +312,24 @@ func parseManufacturesTable(r *models.Registry, el *colly.HTMLElement) error {
 	var rel = r.R.NewStruct()
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
 		var mType string
-		if j != TableHeaderIndex {
+		if j != dict.TableHeaderIndex {
 			var m models.RegistryManufacturer
 			ch.ForEach("td", func(t int, td *colly.HTMLElement) {
 				switch t {
-				case ManufacturerName:
+				case dict.ManufacturerName:
 					m.Title = td.Text
 					break
-				case Country:
+				case dict.Country:
 					m.Country = td.Text
 					break
-				case ManufacturerType:
+				case dict.ManufacturerType:
 					mType = td.Text
 					break
 				default:
 					break
 				}
 			})
-			if mType == ManufacturerRequired {
+			if mType == dict.ManufacturerRequired {
 				rel.RegistryManufacturers = append(rel.RegistryManufacturers, &m)
 			}
 		}
@@ -344,11 +342,11 @@ func parsePartsTable(r *models.Registry, el *colly.HTMLElement) error {
 	var result error
 	var rel = r.R.NewStruct()
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
-		if j != TableHeaderIndex {
+		if j != dict.TableHeaderIndex {
 			var b models.RegistryBuild
 			ch.ForEach("td", func(t int, td *colly.HTMLElement) {
 				switch t {
-				case Order:
+				case dict.Order:
 					o, err := strconv.Atoi(td.Text)
 					if err != nil {
 						result = multierror.Append(result, err)
@@ -356,10 +354,10 @@ func parsePartsTable(r *models.Registry, el *colly.HTMLElement) error {
 					}
 					b.Order = o
 					break
-				case PartName:
+				case dict.PartName:
 					b.Title = td.Text
 					break
-				case Model:
+				case dict.Model:
 					b.Model = td.Text
 					break
 				default:

@@ -20,7 +20,10 @@ var TableNames = struct {
 	Products              string
 	Registries            string
 	RegistryBuilds        string
+	RegistryFieldStats    string
+	RegistryJournals      string
 	RegistryManufacturers string
+	RegistryStatuses      string
 	Roles                 string
 	Subcategories         string
 	Users                 string
@@ -41,7 +44,10 @@ var TableNames = struct {
 	Products:              "products",
 	Registries:            "registries",
 	RegistryBuilds:        "registry_builds",
+	RegistryFieldStats:    "registry_field_stats",
+	RegistryJournals:      "registry_journals",
 	RegistryManufacturers: "registry_manufacturers",
+	RegistryStatuses:      "registry_statuses",
 	Roles:                 "roles",
 	Subcategories:         "subcategories",
 	Users:                 "users",

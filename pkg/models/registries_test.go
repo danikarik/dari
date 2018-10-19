@@ -572,6 +572,83 @@ func testRegistryToManyRegistryBuilds(t *testing.T) {
 	}
 }
 
+func testRegistryToManyRegistryFieldStats(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c RegistryFieldStat
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, true, registryColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Registry struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, registryFieldStatDBTypes, false, registryFieldStatColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryFieldStatDBTypes, false, registryFieldStatColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	queries.Assign(&b.RegistryID, a.ID)
+	queries.Assign(&c.RegistryID, a.ID)
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	registryFieldStat, err := a.RegistryFieldStats().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range registryFieldStat {
+		if queries.Equal(v.RegistryID, b.RegistryID) {
+			bFound = true
+		}
+		if queries.Equal(v.RegistryID, c.RegistryID) {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := RegistrySlice{&a}
+	if err = a.L.LoadRegistryFieldStats(ctx, tx, false, (*[]*Registry)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryFieldStats); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.RegistryFieldStats = nil
+	if err = a.L.LoadRegistryFieldStats(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryFieldStats); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", registryFieldStat)
+	}
+}
+
 func testRegistryToManyRegistryManufacturers(t *testing.T) {
 	var err error
 	ctx := context.Background()
@@ -725,6 +802,257 @@ func testRegistryToManyAddOpRegistryBuilds(t *testing.T) {
 		}
 	}
 }
+func testRegistryToManyAddOpRegistryFieldStats(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e RegistryFieldStat
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryFieldStat{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryFieldStatDBTypes, false, strmangle.SetComplement(registryFieldStatPrimaryKeyColumns, registryFieldStatColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*RegistryFieldStat{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddRegistryFieldStats(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if !queries.Equal(a.ID, first.RegistryID) {
+			t.Error("foreign key was wrong value", a.ID, first.RegistryID)
+		}
+		if !queries.Equal(a.ID, second.RegistryID) {
+			t.Error("foreign key was wrong value", a.ID, second.RegistryID)
+		}
+
+		if first.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.RegistryFieldStats[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.RegistryFieldStats[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.RegistryFieldStats().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
+
+func testRegistryToManySetOpRegistryFieldStats(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e RegistryFieldStat
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryFieldStat{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryFieldStatDBTypes, false, strmangle.SetComplement(registryFieldStatPrimaryKeyColumns, registryFieldStatColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err = a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.SetRegistryFieldStats(ctx, tx, false, &b, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.RegistryFieldStats().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.SetRegistryFieldStats(ctx, tx, true, &d, &e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.RegistryFieldStats().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.RegistryID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.RegistryID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+	if !queries.Equal(a.ID, d.RegistryID) {
+		t.Error("foreign key was wrong value", a.ID, d.RegistryID)
+	}
+	if !queries.Equal(a.ID, e.RegistryID) {
+		t.Error("foreign key was wrong value", a.ID, e.RegistryID)
+	}
+
+	if b.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.Registry != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+	if e.R.Registry != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+
+	if a.R.RegistryFieldStats[0] != &d {
+		t.Error("relationship struct slice not set to correct value")
+	}
+	if a.R.RegistryFieldStats[1] != &e {
+		t.Error("relationship struct slice not set to correct value")
+	}
+}
+
+func testRegistryToManyRemoveOpRegistryFieldStats(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e RegistryFieldStat
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryFieldStat{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryFieldStatDBTypes, false, strmangle.SetComplement(registryFieldStatPrimaryKeyColumns, registryFieldStatColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.AddRegistryFieldStats(ctx, tx, true, foreigners...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.RegistryFieldStats().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.RemoveRegistryFieldStats(ctx, tx, foreigners[:2]...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.RegistryFieldStats().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.RegistryID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.RegistryID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+
+	if b.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.Registry != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+	if e.R.Registry != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+
+	if len(a.R.RegistryFieldStats) != 2 {
+		t.Error("should have preserved two relationships")
+	}
+
+	// Removal doesn't do a stable deletion for performance so we have to flip the order
+	if a.R.RegistryFieldStats[1] != &d {
+		t.Error("relationship to d should have been preserved")
+	}
+	if a.R.RegistryFieldStats[0] != &e {
+		t.Error("relationship to e should have been preserved")
+	}
+}
+
 func testRegistryToManyAddOpRegistryManufacturers(t *testing.T) {
 	var err error
 
@@ -797,6 +1125,114 @@ func testRegistryToManyAddOpRegistryManufacturers(t *testing.T) {
 		}
 		if want := int64((i + 1) * 2); count != want {
 			t.Error("want", want, "got", count)
+		}
+	}
+}
+func testRegistryToOneRegistryStatusUsingRegistryStatus(t *testing.T) {
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var local Registry
+	var foreign RegistryStatus
+
+	seed := randomize.NewSeed()
+	if err := randomize.Struct(seed, &local, registryDBTypes, false, registryColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Registry struct: %s", err)
+	}
+	if err := randomize.Struct(seed, &foreign, registryStatusDBTypes, false, registryStatusColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize RegistryStatus struct: %s", err)
+	}
+
+	if err := foreign.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	local.RegistryStatusID = foreign.ID
+	if err := local.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	check, err := local.RegistryStatus().One(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if check.ID != foreign.ID {
+		t.Errorf("want: %v, got %v", foreign.ID, check.ID)
+	}
+
+	slice := RegistrySlice{&local}
+	if err = local.L.LoadRegistryStatus(ctx, tx, false, (*[]*Registry)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.RegistryStatus == nil {
+		t.Error("struct should have been eager loaded")
+	}
+
+	local.R.RegistryStatus = nil
+	if err = local.L.LoadRegistryStatus(ctx, tx, true, &local, nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.RegistryStatus == nil {
+		t.Error("struct should have been eager loaded")
+	}
+}
+
+func testRegistryToOneSetOpRegistryStatusUsingRegistryStatus(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c RegistryStatus
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &b, registryStatusDBTypes, false, strmangle.SetComplement(registryStatusPrimaryKeyColumns, registryStatusColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryStatusDBTypes, false, strmangle.SetComplement(registryStatusPrimaryKeyColumns, registryStatusColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, x := range []*RegistryStatus{&b, &c} {
+		err = a.SetRegistryStatus(ctx, tx, i != 0, x)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if a.R.RegistryStatus != x {
+			t.Error("relationship struct not set to correct value")
+		}
+
+		if x.R.Registries[0] != &a {
+			t.Error("failed to append to foreign relationship struct")
+		}
+		if a.RegistryStatusID != x.ID {
+			t.Error("foreign key was wrong value", a.RegistryStatusID)
+		}
+
+		zero := reflect.Zero(reflect.TypeOf(a.RegistryStatusID))
+		reflect.Indirect(reflect.ValueOf(&a.RegistryStatusID)).Set(zero)
+
+		if err = a.Reload(ctx, tx); err != nil {
+			t.Fatal("failed to reload", err)
+		}
+
+		if a.RegistryStatusID != x.ID {
+			t.Error("foreign key was wrong value", a.RegistryStatusID, x.ID)
 		}
 	}
 }
@@ -875,7 +1311,7 @@ func testRegistriesSelect(t *testing.T) {
 }
 
 var (
-	registryDBTypes = map[string]string{`CreatedAt`: `timestamp`, `Duration`: `int`, `ExpireDate`: `timestamp`, `ID`: `int`, `IssueDate`: `timestamp`, `Link`: `varchar`, `Number`: `varchar`, `Title`: `text`, `UpdatedAt`: `timestamp`}
+	registryDBTypes = map[string]string{`CreatedAt`: `timestamp`, `Duration`: `int`, `ExpireDate`: `timestamp`, `ID`: `int`, `IssueDate`: `timestamp`, `Link`: `varchar`, `Number`: `varchar`, `RegistryStatusID`: `int`, `Title`: `text`, `UpdatedAt`: `timestamp`}
 	_               = bytes.MinRead
 )
 
