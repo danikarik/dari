@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 
 	"bitbucket.org/kit-systems/dari/pkg/dict"
 	"bitbucket.org/kit-systems/dari/pkg/models"
@@ -9,11 +10,13 @@ import (
 )
 
 func beforeRegistryInsert(ctx context.Context, exec boil.ContextExecutor, r *models.Registry) error {
+	fmt.Println("insert")
 	r.RegistryStatusID = uint(dict.Inserted)
 	return nil
 }
 
 func beforeRegistryUpdate(ctx context.Context, exec boil.ContextExecutor, r *models.Registry) error {
+	fmt.Println("update")
 	r.RegistryStatusID = uint(dict.Updated)
 	return nil
 }

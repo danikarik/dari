@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/oklog/run"
 	"github.com/volatiletech/sqlboiler/boil"
+	"github.com/volatiletech/sqlboiler/queries/qm"
 )
 
 // DB is used for database operations.
@@ -64,7 +65,7 @@ func (db *DB) MarkAsDeleted(regs models.RegistrySlice) error {
 	if err != nil {
 		return err
 	}
-	_, err = models.Registries().UpdateAll(db.ctx, db.conn, models.M{
+	_, err = models.Registries(qm.Where("registry_status_id = ?", uint(dict.Processing))).UpdateAll(db.ctx, db.conn, models.M{
 		"registry_status_id": uint(dict.Deleted),
 		"updated_at":         time.Now(),
 	})
