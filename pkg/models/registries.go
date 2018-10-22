@@ -27,7 +27,7 @@ type Registry struct {
 	Title            string    `boil:"title" json:"title" toml:"title" yaml:"title"`
 	Number           string    `boil:"number" json:"number" toml:"number" yaml:"number"`
 	IssueDate        time.Time `boil:"issue_date" json:"issue_date" toml:"issue_date" yaml:"issue_date"`
-	ExpireDate       time.Time `boil:"expire_date" json:"expire_date" toml:"expire_date" yaml:"expire_date"`
+	ExpireDate       null.Time `boil:"expire_date" json:"expire_date,omitempty" toml:"expire_date" yaml:"expire_date,omitempty"`
 	Duration         int       `boil:"duration" json:"duration" toml:"duration" yaml:"duration"`
 	Link             string    `boil:"link" json:"link" toml:"link" yaml:"link"`
 	RegistryStatusID uint      `boil:"registry_status_id" json:"registry_status_id" toml:"registry_status_id" yaml:"registry_status_id"`
@@ -93,8 +93,8 @@ type registryL struct{}
 
 var (
 	registryColumns               = []string{"id", "title", "number", "issue_date", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
-	registryColumnsWithoutDefault = []string{"id", "title", "number", "duration", "link", "registry_status_id", "created_at", "updated_at"}
-	registryColumnsWithDefault    = []string{"issue_date", "expire_date"}
+	registryColumnsWithoutDefault = []string{"id", "title", "number", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
+	registryColumnsWithDefault    = []string{"issue_date"}
 	registryPrimaryKeyColumns     = []string{"id"}
 )
 

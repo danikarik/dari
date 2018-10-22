@@ -52,12 +52,19 @@ func (p *Parser) updateDatabase() error {
 		}
 	}
 	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", count, p.journal.FailedCount))
-	// p.startBar(1, "Setting deleted status...")
-	// err = p.db.MarkAsDeleted(p.regs)
-	// p.incrementBar()
-	// if err != nil {
-	// 	return err
-	// }
-	// p.finishBar("Done.")
+	p.startBar(1, "Setting deleted status...")
+	err = p.db.MarkAsDeleted(p.regs)
+	p.incrementBar()
+	if err != nil {
+		return err
+	}
+	p.finishBar("Done.")
+	p.startBar(1, "Updating stats...")
+	err = p.db.UpdateCounter(p.journal)
+	if err != nil {
+		return err
+	}
+	p.incrementBar()
+	p.finishBar("Done.")
 	return nil
 }

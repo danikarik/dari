@@ -12,6 +12,7 @@ import (
 	"bitbucket.org/kit-systems/dari/pkg/urlhelper"
 	"github.com/gocolly/colly"
 	"github.com/hashicorp/go-multierror"
+	"github.com/volatiletech/null"
 	"github.com/oklog/run"
 	"go.uber.org/zap"
 	"gopkg.in/cheggaaa/pb.v1"
@@ -61,6 +62,17 @@ func (p *Parser) Run() error {
 	defer func() {
 		if derr := p.logger.Sync(); derr != nil {
 			p.logger.Error("sync", zap.Error(derr))
+		}
+	}()
+
+	err = p.startProcess(time.Now())
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if terr := p.finishProcess(time.Now()); terr != nil {
+			p.logger.Error("process", zap.Error(terr))
 		}
 	}()
 
@@ -182,13 +194,13 @@ func (p *Parser) collectPages() error {
 
 func (p *Parser) collectRecords() error {
 	total := len(p.meta.Rows)
-	errors := 0
 	p.startBar(total, "Collecting records...")
 	for _, r := range p.meta.Rows {
 		rec, err := p.visitPrint(r.ID)
 		p.incrementBar()
 		if err != nil {
 			rec.RegistryStatusID = uint(dict.ParsingFailed)
+			p.journal.FailedCount++
 			p.logger.Error(
 				"registry",
 				zap.String("link", rec.Link),
@@ -197,7 +209,7 @@ func (p *Parser) collectRecords() error {
 			)
 		}
 	}
-	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", total, errors))
+	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", total, p.journal.FailedCount))
 	return nil
 }
 
@@ -216,6 +228,7 @@ func (p *Parser) visitPage(page int) error {
 }
 
 func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
+	var result error
 	rowid, err := strconv.ParseUint(ID, 10, 0)
 	if err != nil {
 		return nil, err
@@ -233,12 +246,15 @@ func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
 		p.onError(r, err)
 	})
 	c.OnHTML("body", func(e *colly.HTMLElement) {
-		err = parsePage(&r, e)
+		result = parsePage(&r, e)
 	})
 	c.OnScraped(func(resp *colly.Response) {
 		p.addRegistry(&r)
 	})
-	return &r, c.Visit(url)
+	if err = c.Visit(url); err != nil {
+		return nil, err
+	}
+	return &r, result
 }
 
 func parsePage(r *models.Registry, e *colly.HTMLElement) error {
@@ -293,12 +309,15 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 			r.Duration = d
 			break
 		case dict.ExpireDate:
-			dt, err := time.Parse("02.01.2006", ch.ChildText("td"))
-			if err != nil {
-				result = multierror.Append(result, err)
-				break
+			val := ch.ChildText("td")
+			if val != "" {
+				dt, err := time.Parse("02.01.2006", ch.ChildText("td"))
+				if err != nil {
+					result = multierror.Append(result, err)
+					break
+				}
+				r.ExpireDate = null.NewTime(dt, true)
 			}
-			r.ExpireDate = dt
 			break
 		default:
 			break

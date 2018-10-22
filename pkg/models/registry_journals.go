@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/volatiletech/null"
 	"github.com/volatiletech/sqlboiler/boil"
 	"github.com/volatiletech/sqlboiler/queries"
 	"github.com/volatiletech/sqlboiler/queries/qm"
@@ -23,13 +24,14 @@ import (
 // RegistryJournal is an object representing the database table.
 type RegistryJournal struct {
 	ID            uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	UserID        null.Uint `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
 	TotalCount    uint      `boil:"total_count" json:"total_count" toml:"total_count" yaml:"total_count"`
 	FailedCount   uint      `boil:"failed_count" json:"failed_count" toml:"failed_count" yaml:"failed_count"`
 	InsertedCount uint      `boil:"inserted_count" json:"inserted_count" toml:"inserted_count" yaml:"inserted_count"`
 	UpdatedCount  uint      `boil:"updated_count" json:"updated_count" toml:"updated_count" yaml:"updated_count"`
 	DeletedCount  uint      `boil:"deleted_count" json:"deleted_count" toml:"deleted_count" yaml:"deleted_count"`
 	StartedAt     time.Time `boil:"started_at" json:"started_at" toml:"started_at" yaml:"started_at"`
-	FinishedAt    time.Time `boil:"finished_at" json:"finished_at" toml:"finished_at" yaml:"finished_at"`
+	FinishedAt    null.Time `boil:"finished_at" json:"finished_at,omitempty" toml:"finished_at" yaml:"finished_at,omitempty"`
 
 	R *registryJournalR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L registryJournalL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -37,6 +39,7 @@ type RegistryJournal struct {
 
 var RegistryJournalColumns = struct {
 	ID            string
+	UserID        string
 	TotalCount    string
 	FailedCount   string
 	InsertedCount string
@@ -46,6 +49,7 @@ var RegistryJournalColumns = struct {
 	FinishedAt    string
 }{
 	ID:            "id",
+	UserID:        "user_id",
 	TotalCount:    "total_count",
 	FailedCount:   "failed_count",
 	InsertedCount: "inserted_count",
@@ -57,13 +61,16 @@ var RegistryJournalColumns = struct {
 
 // RegistryJournalRels is where relationship names are stored.
 var RegistryJournalRels = struct {
+	User               string
 	RegistryFieldStats string
 }{
+	User:               "User",
 	RegistryFieldStats: "RegistryFieldStats",
 }
 
 // registryJournalR is where relationships are stored.
 type registryJournalR struct {
+	User               *User
 	RegistryFieldStats RegistryFieldStatSlice
 }
 
@@ -76,9 +83,9 @@ func (*registryJournalR) NewStruct() *registryJournalR {
 type registryJournalL struct{}
 
 var (
-	registryJournalColumns               = []string{"id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at", "finished_at"}
-	registryJournalColumnsWithoutDefault = []string{"total_count", "failed_count", "inserted_count", "updated_count", "deleted_count"}
-	registryJournalColumnsWithDefault    = []string{"id", "started_at", "finished_at"}
+	registryJournalColumns               = []string{"id", "user_id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at", "finished_at"}
+	registryJournalColumnsWithoutDefault = []string{"user_id", "finished_at"}
+	registryJournalColumnsWithDefault    = []string{"id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at"}
 	registryJournalPrimaryKeyColumns     = []string{"id"}
 )
 
@@ -317,6 +324,20 @@ func (q registryJournalQuery) Exists(ctx context.Context, exec boil.ContextExecu
 	return count > 0, nil
 }
 
+// User pointed to by the foreign key.
+func (o *RegistryJournal) User(mods ...qm.QueryMod) userQuery {
+	queryMods := []qm.QueryMod{
+		qm.Where("id=?", o.UserID),
+	}
+
+	queryMods = append(queryMods, mods...)
+
+	query := Users(queryMods...)
+	queries.SetFrom(query.Query, "`users`")
+
+	return query
+}
+
 // RegistryFieldStats retrieves all the registry_field_stat's RegistryFieldStats with an executor.
 func (o *RegistryJournal) RegistryFieldStats(mods ...qm.QueryMod) registryFieldStatQuery {
 	var queryMods []qm.QueryMod
@@ -336,6 +357,101 @@ func (o *RegistryJournal) RegistryFieldStats(mods ...qm.QueryMod) registryFieldS
 	}
 
 	return query
+}
+
+// LoadUser allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for an N-1 relationship.
+func (registryJournalL) LoadUser(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistryJournal interface{}, mods queries.Applicator) error {
+	var slice []*RegistryJournal
+	var object *RegistryJournal
+
+	if singular {
+		object = maybeRegistryJournal.(*RegistryJournal)
+	} else {
+		slice = *maybeRegistryJournal.(*[]*RegistryJournal)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryJournalR{}
+		}
+		args = append(args, object.UserID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryJournalR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.UserID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.UserID)
+		}
+	}
+
+	query := NewQuery(qm.From(`users`), qm.WhereIn(`id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load User")
+	}
+
+	var resultSlice []*User
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice User")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results of eager load for users")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for users")
+	}
+
+	if len(registryJournalAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(resultSlice) == 0 {
+		return nil
+	}
+
+	if singular {
+		foreign := resultSlice[0]
+		object.R.User = foreign
+		if foreign.R == nil {
+			foreign.R = &userR{}
+		}
+		foreign.R.RegistryJournals = append(foreign.R.RegistryJournals, object)
+		return nil
+	}
+
+	for _, local := range slice {
+		for _, foreign := range resultSlice {
+			if queries.Equal(local.UserID, foreign.ID) {
+				local.R.User = foreign
+				if foreign.R == nil {
+					foreign.R = &userR{}
+				}
+				foreign.R.RegistryJournals = append(foreign.R.RegistryJournals, local)
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadRegistryFieldStats allows an eager lookup of values, cached into the
@@ -426,6 +542,84 @@ func (registryJournalL) LoadRegistryFieldStats(ctx context.Context, e boil.Conte
 		}
 	}
 
+	return nil
+}
+
+// SetUser of the registryJournal to the related item.
+// Sets o.R.User to related.
+// Adds o to related.R.RegistryJournals.
+func (o *RegistryJournal) SetUser(ctx context.Context, exec boil.ContextExecutor, insert bool, related *User) error {
+	var err error
+	if insert {
+		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
+			return errors.Wrap(err, "failed to insert into foreign table")
+		}
+	}
+
+	updateQuery := fmt.Sprintf(
+		"UPDATE `registry_journals` SET %s WHERE %s",
+		strmangle.SetParamNames("`", "`", 0, []string{"user_id"}),
+		strmangle.WhereClause("`", "`", 0, registryJournalPrimaryKeyColumns),
+	)
+	values := []interface{}{related.ID, o.ID}
+
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, updateQuery)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	queries.Assign(&o.UserID, related.ID)
+	if o.R == nil {
+		o.R = &registryJournalR{
+			User: related,
+		}
+	} else {
+		o.R.User = related
+	}
+
+	if related.R == nil {
+		related.R = &userR{
+			RegistryJournals: RegistryJournalSlice{o},
+		}
+	} else {
+		related.R.RegistryJournals = append(related.R.RegistryJournals, o)
+	}
+
+	return nil
+}
+
+// RemoveUser relationship.
+// Sets o.R.User to nil.
+// Removes o from all passed in related items' relationships struct (Optional).
+func (o *RegistryJournal) RemoveUser(ctx context.Context, exec boil.ContextExecutor, related *User) error {
+	var err error
+
+	queries.SetScanner(&o.UserID, nil)
+	if _, err = o.Update(ctx, exec, boil.Whitelist("user_id")); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	o.R.User = nil
+	if related == nil || related.R == nil {
+		return nil
+	}
+
+	for i, ri := range related.R.RegistryJournals {
+		if queries.Equal(o.UserID, ri.UserID) {
+			continue
+		}
+
+		ln := len(related.R.RegistryJournals)
+		if ln > 1 && i < ln-1 {
+			related.R.RegistryJournals[i] = related.R.RegistryJournals[ln-1]
+		}
+		related.R.RegistryJournals = related.R.RegistryJournals[:ln-1]
+		break
+	}
 	return nil
 }
 

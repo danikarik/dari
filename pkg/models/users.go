@@ -61,20 +61,23 @@ var UserColumns = struct {
 
 // UserRels is where relationship names are stored.
 var UserRels = struct {
-	Role       string
-	Offers     string
-	Pricelists string
+	Role             string
+	Offers           string
+	Pricelists       string
+	RegistryJournals string
 }{
-	Role:       "Role",
-	Offers:     "Offers",
-	Pricelists: "Pricelists",
+	Role:             "Role",
+	Offers:           "Offers",
+	Pricelists:       "Pricelists",
+	RegistryJournals: "RegistryJournals",
 }
 
 // userR is where relationships are stored.
 type userR struct {
-	Role       *Role
-	Offers     OfferSlice
-	Pricelists PricelistSlice
+	Role             *Role
+	Offers           OfferSlice
+	Pricelists       PricelistSlice
+	RegistryJournals RegistryJournalSlice
 }
 
 // NewStruct creates a new relationship struct
@@ -383,6 +386,27 @@ func (o *User) Pricelists(mods ...qm.QueryMod) pricelistQuery {
 	return query
 }
 
+// RegistryJournals retrieves all the registry_journal's RegistryJournals with an executor.
+func (o *User) RegistryJournals(mods ...qm.QueryMod) registryJournalQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`registry_journals`.`user_id`=?", o.ID),
+	)
+
+	query := RegistryJournals(queryMods...)
+	queries.SetFrom(query.Query, "`registry_journals`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`registry_journals`.*"})
+	}
+
+	return query
+}
+
 // LoadRole allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for an N-1 relationship.
 func (userL) LoadRole(ctx context.Context, e boil.ContextExecutor, singular bool, maybeUser interface{}, mods queries.Applicator) error {
@@ -660,6 +684,97 @@ func (userL) LoadPricelists(ctx context.Context, e boil.ContextExecutor, singula
 	return nil
 }
 
+// LoadRegistryJournals allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (userL) LoadRegistryJournals(ctx context.Context, e boil.ContextExecutor, singular bool, maybeUser interface{}, mods queries.Applicator) error {
+	var slice []*User
+	var object *User
+
+	if singular {
+		object = maybeUser.(*User)
+	} else {
+		slice = *maybeUser.(*[]*User)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &userR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &userR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.ID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registry_journals`), qm.WhereIn(`user_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load registry_journals")
+	}
+
+	var resultSlice []*RegistryJournal
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice registry_journals")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on registry_journals")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registry_journals")
+	}
+
+	if len(registryJournalAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.RegistryJournals = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &registryJournalR{}
+			}
+			foreign.R.User = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if queries.Equal(local.ID, foreign.UserID) {
+				local.R.RegistryJournals = append(local.R.RegistryJournals, foreign)
+				if foreign.R == nil {
+					foreign.R = &registryJournalR{}
+				}
+				foreign.R.User = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // SetRole of the user to the related item.
 // Sets o.R.Role to related.
 // Adds o to related.R.Users.
@@ -880,6 +995,129 @@ func (o *User) AddPricelists(ctx context.Context, exec boil.ContextExecutor, ins
 			rel.R.User = o
 		}
 	}
+	return nil
+}
+
+// AddRegistryJournals adds the given related objects to the existing relationships
+// of the user, optionally inserting them as new records.
+// Appends related to o.R.RegistryJournals.
+// Sets related.R.User appropriately.
+func (o *User) AddRegistryJournals(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryJournal) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			queries.Assign(&rel.UserID, o.ID)
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `registry_journals` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"user_id"}),
+				strmangle.WhereClause("`", "`", 0, registryJournalPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			queries.Assign(&rel.UserID, o.ID)
+		}
+	}
+
+	if o.R == nil {
+		o.R = &userR{
+			RegistryJournals: related,
+		}
+	} else {
+		o.R.RegistryJournals = append(o.R.RegistryJournals, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &registryJournalR{
+				User: o,
+			}
+		} else {
+			rel.R.User = o
+		}
+	}
+	return nil
+}
+
+// SetRegistryJournals removes all previously related items of the
+// user replacing them completely with the passed
+// in related items, optionally inserting them as new records.
+// Sets o.R.User's RegistryJournals accordingly.
+// Replaces o.R.RegistryJournals with related.
+// Sets related.R.User's RegistryJournals accordingly.
+func (o *User) SetRegistryJournals(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryJournal) error {
+	query := "update `registry_journals` set `user_id` = null where `user_id` = ?"
+	values := []interface{}{o.ID}
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, query)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	_, err := exec.ExecContext(ctx, query, values...)
+	if err != nil {
+		return errors.Wrap(err, "failed to remove relationships before set")
+	}
+
+	if o.R != nil {
+		for _, rel := range o.R.RegistryJournals {
+			queries.SetScanner(&rel.UserID, nil)
+			if rel.R == nil {
+				continue
+			}
+
+			rel.R.User = nil
+		}
+
+		o.R.RegistryJournals = nil
+	}
+	return o.AddRegistryJournals(ctx, exec, insert, related...)
+}
+
+// RemoveRegistryJournals relationships from objects passed in.
+// Removes related items from R.RegistryJournals (uses pointer comparison, removal does not keep order)
+// Sets related.R.User.
+func (o *User) RemoveRegistryJournals(ctx context.Context, exec boil.ContextExecutor, related ...*RegistryJournal) error {
+	var err error
+	for _, rel := range related {
+		queries.SetScanner(&rel.UserID, nil)
+		if rel.R != nil {
+			rel.R.User = nil
+		}
+		if _, err = rel.Update(ctx, exec, boil.Whitelist("user_id")); err != nil {
+			return err
+		}
+	}
+	if o.R == nil {
+		return nil
+	}
+
+	for _, rel := range related {
+		for i, ri := range o.R.RegistryJournals {
+			if rel != ri {
+				continue
+			}
+
+			ln := len(o.R.RegistryJournals)
+			if ln > 1 && i < ln-1 {
+				o.R.RegistryJournals[i] = o.R.RegistryJournals[ln-1]
+			}
+			o.R.RegistryJournals = o.R.RegistryJournals[:ln-1]
+			break
+		}
+	}
+
 	return nil
 }
 

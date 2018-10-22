@@ -649,6 +649,83 @@ func testUserToManyPricelists(t *testing.T) {
 	}
 }
 
+func testUserToManyRegistryJournals(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a User
+	var b, c RegistryJournal
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, userDBTypes, true, userColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize User struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, registryJournalDBTypes, false, registryJournalColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryJournalDBTypes, false, registryJournalColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	queries.Assign(&b.UserID, a.ID)
+	queries.Assign(&c.UserID, a.ID)
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	registryJournal, err := a.RegistryJournals().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range registryJournal {
+		if queries.Equal(v.UserID, b.UserID) {
+			bFound = true
+		}
+		if queries.Equal(v.UserID, c.UserID) {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := UserSlice{&a}
+	if err = a.L.LoadRegistryJournals(ctx, tx, false, (*[]*User)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryJournals); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.RegistryJournals = nil
+	if err = a.L.LoadRegistryJournals(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryJournals); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", registryJournal)
+	}
+}
+
 func testUserToManyAddOpOffers(t *testing.T) {
 	var err error
 
@@ -975,6 +1052,257 @@ func testUserToManyAddOpPricelists(t *testing.T) {
 		}
 	}
 }
+func testUserToManyAddOpRegistryJournals(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a User
+	var b, c, d, e RegistryJournal
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, userDBTypes, false, strmangle.SetComplement(userPrimaryKeyColumns, userColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryJournal{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryJournalDBTypes, false, strmangle.SetComplement(registryJournalPrimaryKeyColumns, registryJournalColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*RegistryJournal{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddRegistryJournals(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if !queries.Equal(a.ID, first.UserID) {
+			t.Error("foreign key was wrong value", a.ID, first.UserID)
+		}
+		if !queries.Equal(a.ID, second.UserID) {
+			t.Error("foreign key was wrong value", a.ID, second.UserID)
+		}
+
+		if first.R.User != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.User != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.RegistryJournals[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.RegistryJournals[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.RegistryJournals().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
+
+func testUserToManySetOpRegistryJournals(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a User
+	var b, c, d, e RegistryJournal
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, userDBTypes, false, strmangle.SetComplement(userPrimaryKeyColumns, userColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryJournal{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryJournalDBTypes, false, strmangle.SetComplement(registryJournalPrimaryKeyColumns, registryJournalColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err = a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.SetRegistryJournals(ctx, tx, false, &b, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.RegistryJournals().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.SetRegistryJournals(ctx, tx, true, &d, &e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.RegistryJournals().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.UserID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.UserID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+	if !queries.Equal(a.ID, d.UserID) {
+		t.Error("foreign key was wrong value", a.ID, d.UserID)
+	}
+	if !queries.Equal(a.ID, e.UserID) {
+		t.Error("foreign key was wrong value", a.ID, e.UserID)
+	}
+
+	if b.R.User != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.User != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.User != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+	if e.R.User != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+
+	if a.R.RegistryJournals[0] != &d {
+		t.Error("relationship struct slice not set to correct value")
+	}
+	if a.R.RegistryJournals[1] != &e {
+		t.Error("relationship struct slice not set to correct value")
+	}
+}
+
+func testUserToManyRemoveOpRegistryJournals(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a User
+	var b, c, d, e RegistryJournal
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, userDBTypes, false, strmangle.SetComplement(userPrimaryKeyColumns, userColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryJournal{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryJournalDBTypes, false, strmangle.SetComplement(registryJournalPrimaryKeyColumns, registryJournalColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.AddRegistryJournals(ctx, tx, true, foreigners...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.RegistryJournals().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.RemoveRegistryJournals(ctx, tx, foreigners[:2]...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.RegistryJournals().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.UserID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.UserID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+
+	if b.R.User != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.User != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.User != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+	if e.R.User != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+
+	if len(a.R.RegistryJournals) != 2 {
+		t.Error("should have preserved two relationships")
+	}
+
+	// Removal doesn't do a stable deletion for performance so we have to flip the order
+	if a.R.RegistryJournals[1] != &d {
+		t.Error("relationship to d should have been preserved")
+	}
+	if a.R.RegistryJournals[0] != &e {
+		t.Error("relationship to e should have been preserved")
+	}
+}
+
 func testUserToOneRoleUsingRole(t *testing.T) {
 	ctx := context.Background()
 	tx := MustTx(boil.BeginTx(ctx, nil))

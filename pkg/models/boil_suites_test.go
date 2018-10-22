@@ -370,6 +370,7 @@ func TestToOne(t *testing.T) {
 	t.Run("RegistryBuildToRegistryUsingRegistry", testRegistryBuildToOneRegistryUsingRegistry)
 	t.Run("RegistryFieldStatToRegistryUsingRegistry", testRegistryFieldStatToOneRegistryUsingRegistry)
 	t.Run("RegistryFieldStatToRegistryJournalUsingRegistryJournal", testRegistryFieldStatToOneRegistryJournalUsingRegistryJournal)
+	t.Run("RegistryJournalToUserUsingUser", testRegistryJournalToOneUserUsingUser)
 	t.Run("RegistryManufacturerToRegistryUsingRegistry", testRegistryManufacturerToOneRegistryUsingRegistry)
 	t.Run("SubcategoryToCategoryUsingCategory", testSubcategoryToOneCategoryUsingCategory)
 	t.Run("UserToRoleUsingRole", testUserToOneRoleUsingRole)
@@ -406,6 +407,7 @@ func TestToMany(t *testing.T) {
 	t.Run("SubcategoryToProducts", testSubcategoryToManyProducts)
 	t.Run("UserToOffers", testUserToManyOffers)
 	t.Run("UserToPricelists", testUserToManyPricelists)
+	t.Run("UserToRegistryJournals", testUserToManyRegistryJournals)
 }
 
 // TestToOneSet tests cannot be run in parallel
@@ -432,6 +434,7 @@ func TestToOneSet(t *testing.T) {
 	t.Run("RegistryBuildToRegistryUsingRegistryBuilds", testRegistryBuildToOneSetOpRegistryUsingRegistry)
 	t.Run("RegistryFieldStatToRegistryUsingRegistryFieldStats", testRegistryFieldStatToOneSetOpRegistryUsingRegistry)
 	t.Run("RegistryFieldStatToRegistryJournalUsingRegistryFieldStats", testRegistryFieldStatToOneSetOpRegistryJournalUsingRegistryJournal)
+	t.Run("RegistryJournalToUserUsingRegistryJournals", testRegistryJournalToOneSetOpUserUsingUser)
 	t.Run("RegistryManufacturerToRegistryUsingRegistryManufacturers", testRegistryManufacturerToOneSetOpRegistryUsingRegistry)
 	t.Run("SubcategoryToCategoryUsingSubcategories", testSubcategoryToOneSetOpCategoryUsingCategory)
 	t.Run("UserToRoleUsingUsers", testUserToOneSetOpRoleUsingRole)
@@ -448,6 +451,7 @@ func TestToOneRemove(t *testing.T) {
 	t.Run("ProductToMaterialUsingProducts", testProductToOneRemoveOpMaterialUsingMaterial)
 	t.Run("ProductToSubcategoryUsingProducts", testProductToOneRemoveOpSubcategoryUsingSubcategory)
 	t.Run("RegistryFieldStatToRegistryUsingRegistryFieldStats", testRegistryFieldStatToOneRemoveOpRegistryUsingRegistry)
+	t.Run("RegistryJournalToUserUsingRegistryJournals", testRegistryJournalToOneRemoveOpUserUsingUser)
 }
 
 // TestOneToOneSet tests cannot be run in parallel
@@ -485,6 +489,7 @@ func TestToManyAdd(t *testing.T) {
 	t.Run("SubcategoryToProducts", testSubcategoryToManyAddOpProducts)
 	t.Run("UserToOffers", testUserToManyAddOpOffers)
 	t.Run("UserToPricelists", testUserToManyAddOpPricelists)
+	t.Run("UserToRegistryJournals", testUserToManyAddOpRegistryJournals)
 }
 
 // TestToManySet tests cannot be run in parallel
@@ -498,6 +503,7 @@ func TestToManySet(t *testing.T) {
 	t.Run("SubcategoryToDiscounts", testSubcategoryToManySetOpDiscounts)
 	t.Run("SubcategoryToProducts", testSubcategoryToManySetOpProducts)
 	t.Run("UserToOffers", testUserToManySetOpOffers)
+	t.Run("UserToRegistryJournals", testUserToManySetOpRegistryJournals)
 }
 
 // TestToManyRemove tests cannot be run in parallel
@@ -511,6 +517,7 @@ func TestToManyRemove(t *testing.T) {
 	t.Run("SubcategoryToDiscounts", testSubcategoryToManyRemoveOpDiscounts)
 	t.Run("SubcategoryToProducts", testSubcategoryToManyRemoveOpProducts)
 	t.Run("UserToOffers", testUserToManyRemoveOpOffers)
+	t.Run("UserToRegistryJournals", testUserToManyRemoveOpRegistryJournals)
 }
 
 func TestReload(t *testing.T) {

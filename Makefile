@@ -10,6 +10,7 @@ build: ## Build binaries
 
 run: ## Run parser
 	@echo 'Starting parser...'
+	@echo '' > ./logs/stdout.log
 	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --limit=1
 
 dump: ## Dump database models
