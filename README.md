@@ -8,7 +8,7 @@
 make
 ```
 
-or 
+or
 
 ```sh
 make build
