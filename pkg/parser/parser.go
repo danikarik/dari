@@ -71,7 +71,7 @@ func (p *Parser) Run() error {
 	}
 
 	defer func() {
-		if terr := p.finishProcess(time.Now()); terr != nil {
+		if terr := p.finishProcess(time.Now(), err); terr != nil {
 			p.logger.Error("process", zap.Error(terr))
 		}
 	}()

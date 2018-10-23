@@ -647,6 +647,57 @@ func testRegistryJournalToManyAddOpRegistryFieldStats(t *testing.T) {
 		}
 	}
 }
+func testRegistryJournalToOneProcessStatusUsingProcessStatus(t *testing.T) {
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var local RegistryJournal
+	var foreign ProcessStatus
+
+	seed := randomize.NewSeed()
+	if err := randomize.Struct(seed, &local, registryJournalDBTypes, false, registryJournalColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize RegistryJournal struct: %s", err)
+	}
+	if err := randomize.Struct(seed, &foreign, processStatusDBTypes, false, processStatusColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize ProcessStatus struct: %s", err)
+	}
+
+	if err := foreign.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	local.ProcessStatusID = foreign.ID
+	if err := local.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	check, err := local.ProcessStatus().One(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if check.ID != foreign.ID {
+		t.Errorf("want: %v, got %v", foreign.ID, check.ID)
+	}
+
+	slice := RegistryJournalSlice{&local}
+	if err = local.L.LoadProcessStatus(ctx, tx, false, (*[]*RegistryJournal)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.ProcessStatus == nil {
+		t.Error("struct should have been eager loaded")
+	}
+
+	local.R.ProcessStatus = nil
+	if err = local.L.LoadProcessStatus(ctx, tx, true, &local, nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.ProcessStatus == nil {
+		t.Error("struct should have been eager loaded")
+	}
+}
+
 func testRegistryJournalToOneUserUsingUser(t *testing.T) {
 	ctx := context.Background()
 	tx := MustTx(boil.BeginTx(ctx, nil))
@@ -698,6 +749,63 @@ func testRegistryJournalToOneUserUsingUser(t *testing.T) {
 	}
 }
 
+func testRegistryJournalToOneSetOpProcessStatusUsingProcessStatus(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a RegistryJournal
+	var b, c ProcessStatus
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryJournalDBTypes, false, strmangle.SetComplement(registryJournalPrimaryKeyColumns, registryJournalColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &b, processStatusDBTypes, false, strmangle.SetComplement(processStatusPrimaryKeyColumns, processStatusColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, processStatusDBTypes, false, strmangle.SetComplement(processStatusPrimaryKeyColumns, processStatusColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, x := range []*ProcessStatus{&b, &c} {
+		err = a.SetProcessStatus(ctx, tx, i != 0, x)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if a.R.ProcessStatus != x {
+			t.Error("relationship struct not set to correct value")
+		}
+
+		if x.R.RegistryJournals[0] != &a {
+			t.Error("failed to append to foreign relationship struct")
+		}
+		if a.ProcessStatusID != x.ID {
+			t.Error("foreign key was wrong value", a.ProcessStatusID)
+		}
+
+		zero := reflect.Zero(reflect.TypeOf(a.ProcessStatusID))
+		reflect.Indirect(reflect.ValueOf(&a.ProcessStatusID)).Set(zero)
+
+		if err = a.Reload(ctx, tx); err != nil {
+			t.Fatal("failed to reload", err)
+		}
+
+		if a.ProcessStatusID != x.ID {
+			t.Error("foreign key was wrong value", a.ProcessStatusID, x.ID)
+		}
+	}
+}
 func testRegistryJournalToOneSetOpUserUsingUser(t *testing.T) {
 	var err error
 
@@ -881,7 +989,7 @@ func testRegistryJournalsSelect(t *testing.T) {
 }
 
 var (
-	registryJournalDBTypes = map[string]string{`DeletedCount`: `int`, `FailedCount`: `int`, `FinishedAt`: `timestamp`, `ID`: `int`, `InsertedCount`: `int`, `StartedAt`: `timestamp`, `TotalCount`: `int`, `UpdatedCount`: `int`, `UserID`: `int`}
+	registryJournalDBTypes = map[string]string{`DeletedCount`: `int`, `FailedCount`: `int`, `FinishedAt`: `timestamp`, `ID`: `int`, `InsertedCount`: `int`, `ProcessStatusID`: `int`, `StartedAt`: `timestamp`, `TotalCount`: `int`, `UpdatedCount`: `int`, `UserID`: `int`}
 	_                      = bytes.MinRead
 )
 

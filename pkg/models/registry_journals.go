@@ -23,53 +23,59 @@ import (
 
 // RegistryJournal is an object representing the database table.
 type RegistryJournal struct {
-	ID            uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	UserID        null.Uint `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
-	TotalCount    uint      `boil:"total_count" json:"total_count" toml:"total_count" yaml:"total_count"`
-	FailedCount   uint      `boil:"failed_count" json:"failed_count" toml:"failed_count" yaml:"failed_count"`
-	InsertedCount uint      `boil:"inserted_count" json:"inserted_count" toml:"inserted_count" yaml:"inserted_count"`
-	UpdatedCount  uint      `boil:"updated_count" json:"updated_count" toml:"updated_count" yaml:"updated_count"`
-	DeletedCount  uint      `boil:"deleted_count" json:"deleted_count" toml:"deleted_count" yaml:"deleted_count"`
-	StartedAt     time.Time `boil:"started_at" json:"started_at" toml:"started_at" yaml:"started_at"`
-	FinishedAt    null.Time `boil:"finished_at" json:"finished_at,omitempty" toml:"finished_at" yaml:"finished_at,omitempty"`
+	ID              uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	UserID          null.Uint `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
+	TotalCount      uint      `boil:"total_count" json:"total_count" toml:"total_count" yaml:"total_count"`
+	FailedCount     uint      `boil:"failed_count" json:"failed_count" toml:"failed_count" yaml:"failed_count"`
+	InsertedCount   uint      `boil:"inserted_count" json:"inserted_count" toml:"inserted_count" yaml:"inserted_count"`
+	UpdatedCount    uint      `boil:"updated_count" json:"updated_count" toml:"updated_count" yaml:"updated_count"`
+	DeletedCount    uint      `boil:"deleted_count" json:"deleted_count" toml:"deleted_count" yaml:"deleted_count"`
+	ProcessStatusID uint      `boil:"process_status_id" json:"process_status_id" toml:"process_status_id" yaml:"process_status_id"`
+	StartedAt       time.Time `boil:"started_at" json:"started_at" toml:"started_at" yaml:"started_at"`
+	FinishedAt      null.Time `boil:"finished_at" json:"finished_at,omitempty" toml:"finished_at" yaml:"finished_at,omitempty"`
 
 	R *registryJournalR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L registryJournalL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var RegistryJournalColumns = struct {
-	ID            string
-	UserID        string
-	TotalCount    string
-	FailedCount   string
-	InsertedCount string
-	UpdatedCount  string
-	DeletedCount  string
-	StartedAt     string
-	FinishedAt    string
+	ID              string
+	UserID          string
+	TotalCount      string
+	FailedCount     string
+	InsertedCount   string
+	UpdatedCount    string
+	DeletedCount    string
+	ProcessStatusID string
+	StartedAt       string
+	FinishedAt      string
 }{
-	ID:            "id",
-	UserID:        "user_id",
-	TotalCount:    "total_count",
-	FailedCount:   "failed_count",
-	InsertedCount: "inserted_count",
-	UpdatedCount:  "updated_count",
-	DeletedCount:  "deleted_count",
-	StartedAt:     "started_at",
-	FinishedAt:    "finished_at",
+	ID:              "id",
+	UserID:          "user_id",
+	TotalCount:      "total_count",
+	FailedCount:     "failed_count",
+	InsertedCount:   "inserted_count",
+	UpdatedCount:    "updated_count",
+	DeletedCount:    "deleted_count",
+	ProcessStatusID: "process_status_id",
+	StartedAt:       "started_at",
+	FinishedAt:      "finished_at",
 }
 
 // RegistryJournalRels is where relationship names are stored.
 var RegistryJournalRels = struct {
+	ProcessStatus      string
 	User               string
 	RegistryFieldStats string
 }{
+	ProcessStatus:      "ProcessStatus",
 	User:               "User",
 	RegistryFieldStats: "RegistryFieldStats",
 }
 
 // registryJournalR is where relationships are stored.
 type registryJournalR struct {
+	ProcessStatus      *ProcessStatus
 	User               *User
 	RegistryFieldStats RegistryFieldStatSlice
 }
@@ -83,8 +89,8 @@ func (*registryJournalR) NewStruct() *registryJournalR {
 type registryJournalL struct{}
 
 var (
-	registryJournalColumns               = []string{"id", "user_id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at", "finished_at"}
-	registryJournalColumnsWithoutDefault = []string{"user_id", "finished_at"}
+	registryJournalColumns               = []string{"id", "user_id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "process_status_id", "started_at", "finished_at"}
+	registryJournalColumnsWithoutDefault = []string{"user_id", "process_status_id", "finished_at"}
 	registryJournalColumnsWithDefault    = []string{"id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at"}
 	registryJournalPrimaryKeyColumns     = []string{"id"}
 )
@@ -324,6 +330,20 @@ func (q registryJournalQuery) Exists(ctx context.Context, exec boil.ContextExecu
 	return count > 0, nil
 }
 
+// ProcessStatus pointed to by the foreign key.
+func (o *RegistryJournal) ProcessStatus(mods ...qm.QueryMod) processStatusQuery {
+	queryMods := []qm.QueryMod{
+		qm.Where("id=?", o.ProcessStatusID),
+	}
+
+	queryMods = append(queryMods, mods...)
+
+	query := ProcessStatuses(queryMods...)
+	queries.SetFrom(query.Query, "`process_statuses`")
+
+	return query
+}
+
 // User pointed to by the foreign key.
 func (o *RegistryJournal) User(mods ...qm.QueryMod) userQuery {
 	queryMods := []qm.QueryMod{
@@ -357,6 +377,101 @@ func (o *RegistryJournal) RegistryFieldStats(mods ...qm.QueryMod) registryFieldS
 	}
 
 	return query
+}
+
+// LoadProcessStatus allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for an N-1 relationship.
+func (registryJournalL) LoadProcessStatus(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistryJournal interface{}, mods queries.Applicator) error {
+	var slice []*RegistryJournal
+	var object *RegistryJournal
+
+	if singular {
+		object = maybeRegistryJournal.(*RegistryJournal)
+	} else {
+		slice = *maybeRegistryJournal.(*[]*RegistryJournal)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryJournalR{}
+		}
+		args = append(args, object.ProcessStatusID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryJournalR{}
+			}
+
+			for _, a := range args {
+				if a == obj.ProcessStatusID {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ProcessStatusID)
+		}
+	}
+
+	query := NewQuery(qm.From(`process_statuses`), qm.WhereIn(`id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load ProcessStatus")
+	}
+
+	var resultSlice []*ProcessStatus
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice ProcessStatus")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results of eager load for process_statuses")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for process_statuses")
+	}
+
+	if len(registryJournalAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(resultSlice) == 0 {
+		return nil
+	}
+
+	if singular {
+		foreign := resultSlice[0]
+		object.R.ProcessStatus = foreign
+		if foreign.R == nil {
+			foreign.R = &processStatusR{}
+		}
+		foreign.R.RegistryJournals = append(foreign.R.RegistryJournals, object)
+		return nil
+	}
+
+	for _, local := range slice {
+		for _, foreign := range resultSlice {
+			if local.ProcessStatusID == foreign.ID {
+				local.R.ProcessStatus = foreign
+				if foreign.R == nil {
+					foreign.R = &processStatusR{}
+				}
+				foreign.R.RegistryJournals = append(foreign.R.RegistryJournals, local)
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 // LoadUser allows an eager lookup of values, cached into the
@@ -540,6 +655,53 @@ func (registryJournalL) LoadRegistryFieldStats(ctx context.Context, e boil.Conte
 				break
 			}
 		}
+	}
+
+	return nil
+}
+
+// SetProcessStatus of the registryJournal to the related item.
+// Sets o.R.ProcessStatus to related.
+// Adds o to related.R.RegistryJournals.
+func (o *RegistryJournal) SetProcessStatus(ctx context.Context, exec boil.ContextExecutor, insert bool, related *ProcessStatus) error {
+	var err error
+	if insert {
+		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
+			return errors.Wrap(err, "failed to insert into foreign table")
+		}
+	}
+
+	updateQuery := fmt.Sprintf(
+		"UPDATE `registry_journals` SET %s WHERE %s",
+		strmangle.SetParamNames("`", "`", 0, []string{"process_status_id"}),
+		strmangle.WhereClause("`", "`", 0, registryJournalPrimaryKeyColumns),
+	)
+	values := []interface{}{related.ID, o.ID}
+
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, updateQuery)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	o.ProcessStatusID = related.ID
+	if o.R == nil {
+		o.R = &registryJournalR{
+			ProcessStatus: related,
+		}
+	} else {
+		o.R.ProcessStatus = related
+	}
+
+	if related.R == nil {
+		related.R = &processStatusR{
+			RegistryJournals: RegistryJournalSlice{o},
+		}
+	} else {
+		related.R.RegistryJournals = append(related.R.RegistryJournals, o)
 	}
 
 	return nil

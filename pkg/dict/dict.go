@@ -77,3 +77,12 @@ const (
 	// RegistryParsingLabel refers to "Обновление данных"
 	RegistryParsingLabel = "Обновление данных"
 )
+
+const (
+	// ProcessRunning refers to "Запущен"
+	ProcessRunning = 1
+	// ProcessFailed refers to "Ошибка"
+	ProcessFailed = 2
+	// ProcessFinished refers to "Завершен"
+	ProcessFinished = 3
+)

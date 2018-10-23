@@ -15,6 +15,7 @@ func (db *DB) UpdateCounter(j *models.RegistryJournal) error {
 	_, err := j.Update(db.ctx, db.conn, boil.Blacklist(
 		"started_at",
 		"finished_at",
+		"process_status_id",
 	))
 	return err
 }

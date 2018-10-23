@@ -17,6 +17,7 @@ var TableNames = struct {
 	Offers                string
 	PasswordResets        string
 	Pricelists            string
+	ProcessStatuses       string
 	Products              string
 	Registries            string
 	RegistryBuilds        string
@@ -41,6 +42,7 @@ var TableNames = struct {
 	Offers:                "offers",
 	PasswordResets:        "password_resets",
 	Pricelists:            "pricelists",
+	ProcessStatuses:       "process_statuses",
 	Products:              "products",
 	Registries:            "registries",
 	RegistryBuilds:        "registry_builds",
