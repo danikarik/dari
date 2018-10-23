@@ -93,8 +93,8 @@ type registryL struct{}
 
 var (
 	registryColumns               = []string{"id", "title", "number", "issue_date", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
-	registryColumnsWithoutDefault = []string{"id", "title", "number", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
-	registryColumnsWithDefault    = []string{"issue_date"}
+	registryColumnsWithoutDefault = []string{"id", "title", "number", "issue_date", "expire_date", "duration", "link", "registry_status_id", "created_at", "updated_at"}
+	registryColumnsWithDefault    = []string{}
 	registryPrimaryKeyColumns     = []string{"id"}
 )
 

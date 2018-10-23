@@ -1,25 +1,17 @@
 package database
 
 import (
-	"context"
-
-	"bitbucket.org/kit-systems/dari/pkg/dict"
 	"bitbucket.org/kit-systems/dari/pkg/models"
 	"github.com/volatiletech/sqlboiler/boil"
 )
 
-func beforeRegistryUpsert(ctx context.Context, exec boil.ContextExecutor, r *models.Registry) error {
-	_, err := models.FindRegistry(ctx, exec, r.ID)
-	if err != nil {
-		r.RegistryStatusID = uint(dict.Inserted)
-	} else {
-		r.RegistryStatusID = uint(dict.Updated)
-	}
+// AddRegistryHooks append hook to registry model.
+func (db *DB) AddRegistryHooks(p boil.HookPoint, h models.RegistryHook) error {
+	models.AddRegistryHook(p, h)
 	return nil
 }
 
-// AddRegistryHooks append hook to registry model.
-func (db *DB) AddRegistryHooks() error {
-	models.AddRegistryHook(boil.BeforeUpsertHook, beforeRegistryUpsert)
-	return nil
+// InsertFieldStat inserts new field changes.
+func (db *DB) InsertFieldStat(fs *models.RegistryFieldStat) error {
+	return fs.Insert(db.ctx, db.conn, boil.Infer())
 }

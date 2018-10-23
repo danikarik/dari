@@ -62,3 +62,18 @@ const (
 	// ParsingFailed means "Ошибка при чтении веб-страницы"
 	ParsingFailed
 )
+
+const (
+	// RegistryNameLabel refers to "Торговое название"
+	RegistryNameLabel = "Торговое название"
+	// RegistryNumberLabel refers to "Регистрационный номер"
+	RegistryNumberLabel = "Регистрационный номер"
+	// RegistryIssueDateLabel refers to "Дата регистрации"
+	RegistryIssueDateLabel = "Дата регистрации"
+	// RegistryDurationLabel refers to "Срок регистрации"
+	RegistryDurationLabel = "Срок регистрации"
+	// RegistryExpireDateLabel refers to "Дата истечения"
+	RegistryExpireDateLabel = "Дата истечения"
+	// RegistryParsingLabel refers to "Обновление данных"
+	RegistryParsingLabel = "Обновление данных"
+)

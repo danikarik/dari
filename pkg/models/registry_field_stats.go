@@ -30,8 +30,7 @@ type RegistryFieldStat struct {
 	OldValue          null.String `boil:"old_value" json:"old_value,omitempty" toml:"old_value" yaml:"old_value,omitempty"`
 	NewValue          null.String `boil:"new_value" json:"new_value,omitempty" toml:"new_value" yaml:"new_value,omitempty"`
 	ErrorMSG          null.String `boil:"error_msg" json:"error_msg,omitempty" toml:"error_msg" yaml:"error_msg,omitempty"`
-	CreatedAt         null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	UpdatedAt         null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	CreatedAt         time.Time   `boil:"created_at" json:"created_at" toml:"created_at" yaml:"created_at"`
 
 	R *registryFieldStatR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L registryFieldStatL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -46,7 +45,6 @@ var RegistryFieldStatColumns = struct {
 	NewValue          string
 	ErrorMSG          string
 	CreatedAt         string
-	UpdatedAt         string
 }{
 	ID:                "id",
 	RegistryID:        "registry_id",
@@ -56,7 +54,6 @@ var RegistryFieldStatColumns = struct {
 	NewValue:          "new_value",
 	ErrorMSG:          "error_msg",
 	CreatedAt:         "created_at",
-	UpdatedAt:         "updated_at",
 }
 
 // RegistryFieldStatRels is where relationship names are stored.
@@ -83,9 +80,9 @@ func (*registryFieldStatR) NewStruct() *registryFieldStatR {
 type registryFieldStatL struct{}
 
 var (
-	registryFieldStatColumns               = []string{"id", "registry_id", "registry_journal_id", "label", "old_value", "new_value", "error_msg", "created_at", "updated_at"}
-	registryFieldStatColumnsWithoutDefault = []string{"registry_id", "registry_journal_id", "label", "old_value", "new_value", "error_msg", "created_at", "updated_at"}
-	registryFieldStatColumnsWithDefault    = []string{"id"}
+	registryFieldStatColumns               = []string{"id", "registry_id", "registry_journal_id", "label", "old_value", "new_value", "error_msg", "created_at"}
+	registryFieldStatColumnsWithoutDefault = []string{"registry_id", "registry_journal_id", "label", "old_value", "new_value", "error_msg"}
+	registryFieldStatColumnsWithDefault    = []string{"id", "created_at"}
 	registryFieldStatPrimaryKeyColumns     = []string{"id"}
 )
 
@@ -709,11 +706,8 @@ func (o *RegistryFieldStat) Insert(ctx context.Context, exec boil.ContextExecuto
 	var err error
 	currTime := time.Now().In(boil.GetLocation())
 
-	if queries.MustTime(o.CreatedAt).IsZero() {
-		queries.SetScanner(&o.CreatedAt, currTime)
-	}
-	if queries.MustTime(o.UpdatedAt).IsZero() {
-		queries.SetScanner(&o.UpdatedAt, currTime)
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = currTime
 	}
 
 	if err := o.doBeforeInsertHooks(ctx, exec); err != nil {
@@ -817,10 +811,6 @@ CacheNoHooks:
 // See boil.Columns.UpdateColumnSet documentation to understand column list inference for updates.
 // Update does not automatically update the record in case of default values. Use .Reload() to refresh the records.
 func (o *RegistryFieldStat) Update(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) (int64, error) {
-	currTime := time.Now().In(boil.GetLocation())
-
-	queries.SetScanner(&o.UpdatedAt, currTime)
-
 	var err error
 	if err = o.doBeforeUpdateHooks(ctx, exec); err != nil {
 		return 0, err
@@ -957,10 +947,9 @@ func (o *RegistryFieldStat) Upsert(ctx context.Context, exec boil.ContextExecuto
 	}
 	currTime := time.Now().In(boil.GetLocation())
 
-	if queries.MustTime(o.CreatedAt).IsZero() {
-		queries.SetScanner(&o.CreatedAt, currTime)
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = currTime
 	}
-	queries.SetScanner(&o.UpdatedAt, currTime)
 
 	if err := o.doBeforeUpsertHooks(ctx, exec); err != nil {
 		return err

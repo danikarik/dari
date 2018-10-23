@@ -837,7 +837,7 @@ func testRegistryFieldStatsSelect(t *testing.T) {
 }
 
 var (
-	registryFieldStatDBTypes = map[string]string{`CreatedAt`: `timestamp`, `ErrorMSG`: `text`, `ID`: `int`, `Label`: `varchar`, `NewValue`: `varchar`, `OldValue`: `varchar`, `RegistryID`: `int`, `RegistryJournalID`: `int`, `UpdatedAt`: `timestamp`}
+	registryFieldStatDBTypes = map[string]string{`CreatedAt`: `timestamp`, `ErrorMSG`: `text`, `ID`: `int`, `Label`: `varchar`, `NewValue`: `text`, `OldValue`: `text`, `RegistryID`: `int`, `RegistryJournalID`: `int`}
 	_                        = bytes.MinRead
 )
 
