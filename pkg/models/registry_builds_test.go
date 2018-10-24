@@ -677,7 +677,7 @@ func testRegistryBuildsSelect(t *testing.T) {
 }
 
 var (
-	registryBuildDBTypes = map[string]string{`CreatedAt`: `timestamp`, `ID`: `int`, `Model`: `varchar`, `Order`: `int`, `RegistryID`: `int`, `Title`: `varchar`, `UpdatedAt`: `timestamp`}
+	registryBuildDBTypes = map[string]string{`CreatedAt`: `timestamp`, `ID`: `int`, `Model`: `text`, `Order`: `int`, `RegistryID`: `int`, `Title`: `text`, `UpdatedAt`: `timestamp`}
 	_                    = bytes.MinRead
 )
 

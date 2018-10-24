@@ -119,7 +119,8 @@ func (db *DB) AddRegistry(r *models.Registry) error {
 		}, func(error) {})
 	}
 	if err = g.Run(); err != nil {
-		return tx.Rollback()
+		txErr := tx.Rollback()
+		return multierror.Append(err, txErr)
 	}
 	return tx.Commit()
 }

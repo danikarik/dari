@@ -37,6 +37,7 @@ type Product struct {
 	CategoryID     uint          `boil:"category_id" json:"category_id" toml:"category_id" yaml:"category_id"`
 	SubcategoryID  null.Uint     `boil:"subcategory_id" json:"subcategory_id,omitempty" toml:"subcategory_id" yaml:"subcategory_id,omitempty"`
 	MaterialID     null.Uint     `boil:"material_id" json:"material_id,omitempty" toml:"material_id" yaml:"material_id,omitempty"`
+	RegistryID     null.Uint     `boil:"registry_id" json:"registry_id,omitempty" toml:"registry_id" yaml:"registry_id,omitempty"`
 	CreatedAt      null.Time     `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	UpdatedAt      null.Time     `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 	DeletedAt      null.Time     `boil:"deleted_at" json:"deleted_at,omitempty" toml:"deleted_at" yaml:"deleted_at,omitempty"`
@@ -59,6 +60,7 @@ var ProductColumns = struct {
 	CategoryID     string
 	SubcategoryID  string
 	MaterialID     string
+	RegistryID     string
 	CreatedAt      string
 	UpdatedAt      string
 	DeletedAt      string
@@ -76,6 +78,7 @@ var ProductColumns = struct {
 	CategoryID:     "category_id",
 	SubcategoryID:  "subcategory_id",
 	MaterialID:     "material_id",
+	RegistryID:     "registry_id",
 	CreatedAt:      "created_at",
 	UpdatedAt:      "updated_at",
 	DeletedAt:      "deleted_at",
@@ -88,6 +91,7 @@ var ProductRels = struct {
 	Manufacturer string
 	Material     string
 	Pricelist    string
+	Registry     string
 	Subcategory  string
 	Descriptions string
 	Offers       string
@@ -97,6 +101,7 @@ var ProductRels = struct {
 	Manufacturer: "Manufacturer",
 	Material:     "Material",
 	Pricelist:    "Pricelist",
+	Registry:     "Registry",
 	Subcategory:  "Subcategory",
 	Descriptions: "Descriptions",
 	Offers:       "Offers",
@@ -109,6 +114,7 @@ type productR struct {
 	Manufacturer *Manufacturer
 	Material     *Material
 	Pricelist    *Pricelist
+	Registry     *Registry
 	Subcategory  *Subcategory
 	Descriptions DescriptionSlice
 	Offers       OfferSlice
@@ -123,8 +129,8 @@ func (*productR) NewStruct() *productR {
 type productL struct{}
 
 var (
-	productColumns               = []string{"id", "pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "created_at", "updated_at", "deleted_at"}
-	productColumnsWithoutDefault = []string{"pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "created_at", "updated_at", "deleted_at"}
+	productColumns               = []string{"id", "pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
+	productColumnsWithoutDefault = []string{"pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
 	productColumnsWithDefault    = []string{"id"}
 	productPrimaryKeyColumns     = []string{"id"}
 )
@@ -430,6 +436,20 @@ func (o *Product) Pricelist(mods ...qm.QueryMod) pricelistQuery {
 
 	query := Pricelists(queryMods...)
 	queries.SetFrom(query.Query, "`pricelists`")
+
+	return query
+}
+
+// Registry pointed to by the foreign key.
+func (o *Product) Registry(mods ...qm.QueryMod) registryQuery {
+	queryMods := []qm.QueryMod{
+		qm.Where("id=?", o.RegistryID),
+	}
+
+	queryMods = append(queryMods, mods...)
+
+	query := Registries(queryMods...)
+	queries.SetFrom(query.Query, "`registries`")
 
 	return query
 }
@@ -955,6 +975,101 @@ func (productL) LoadPricelist(ctx context.Context, e boil.ContextExecutor, singu
 				local.R.Pricelist = foreign
 				if foreign.R == nil {
 					foreign.R = &pricelistR{}
+				}
+				foreign.R.Products = append(foreign.R.Products, local)
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadRegistry allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for an N-1 relationship.
+func (productL) LoadRegistry(ctx context.Context, e boil.ContextExecutor, singular bool, maybeProduct interface{}, mods queries.Applicator) error {
+	var slice []*Product
+	var object *Product
+
+	if singular {
+		object = maybeProduct.(*Product)
+	} else {
+		slice = *maybeProduct.(*[]*Product)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &productR{}
+		}
+		args = append(args, object.RegistryID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &productR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.RegistryID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.RegistryID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registries`), qm.WhereIn(`id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load Registry")
+	}
+
+	var resultSlice []*Registry
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice Registry")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results of eager load for registries")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registries")
+	}
+
+	if len(productAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(resultSlice) == 0 {
+		return nil
+	}
+
+	if singular {
+		foreign := resultSlice[0]
+		object.R.Registry = foreign
+		if foreign.R == nil {
+			foreign.R = &registryR{}
+		}
+		foreign.R.Products = append(foreign.R.Products, object)
+		return nil
+	}
+
+	for _, local := range slice {
+		for _, foreign := range resultSlice {
+			if queries.Equal(local.RegistryID, foreign.ID) {
+				local.R.Registry = foreign
+				if foreign.R == nil {
+					foreign.R = &registryR{}
 				}
 				foreign.R.Products = append(foreign.R.Products, local)
 				break
@@ -1505,6 +1620,84 @@ func (o *Product) SetPricelist(ctx context.Context, exec boil.ContextExecutor, i
 		related.R.Products = append(related.R.Products, o)
 	}
 
+	return nil
+}
+
+// SetRegistry of the product to the related item.
+// Sets o.R.Registry to related.
+// Adds o to related.R.Products.
+func (o *Product) SetRegistry(ctx context.Context, exec boil.ContextExecutor, insert bool, related *Registry) error {
+	var err error
+	if insert {
+		if err = related.Insert(ctx, exec, boil.Infer()); err != nil {
+			return errors.Wrap(err, "failed to insert into foreign table")
+		}
+	}
+
+	updateQuery := fmt.Sprintf(
+		"UPDATE `products` SET %s WHERE %s",
+		strmangle.SetParamNames("`", "`", 0, []string{"registry_id"}),
+		strmangle.WhereClause("`", "`", 0, productPrimaryKeyColumns),
+	)
+	values := []interface{}{related.ID, o.ID}
+
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, updateQuery)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	queries.Assign(&o.RegistryID, related.ID)
+	if o.R == nil {
+		o.R = &productR{
+			Registry: related,
+		}
+	} else {
+		o.R.Registry = related
+	}
+
+	if related.R == nil {
+		related.R = &registryR{
+			Products: ProductSlice{o},
+		}
+	} else {
+		related.R.Products = append(related.R.Products, o)
+	}
+
+	return nil
+}
+
+// RemoveRegistry relationship.
+// Sets o.R.Registry to nil.
+// Removes o from all passed in related items' relationships struct (Optional).
+func (o *Product) RemoveRegistry(ctx context.Context, exec boil.ContextExecutor, related *Registry) error {
+	var err error
+
+	queries.SetScanner(&o.RegistryID, nil)
+	if _, err = o.Update(ctx, exec, boil.Whitelist("registry_id")); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	o.R.Registry = nil
+	if related == nil || related.R == nil {
+		return nil
+	}
+
+	for i, ri := range related.R.Products {
+		if queries.Equal(o.RegistryID, ri.RegistryID) {
+			continue
+		}
+
+		ln := len(related.R.Products)
+		if ln > 1 && i < ln-1 {
+			related.R.Products[i] = related.R.Products[ln-1]
+		}
+		related.R.Products = related.R.Products[:ln-1]
+		break
+	}
 	return nil
 }
 

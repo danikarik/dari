@@ -494,6 +494,83 @@ func testRegistriesInsertWhitelist(t *testing.T) {
 	}
 }
 
+func testRegistryToManyProducts(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c Product
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, true, registryColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Registry struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, productDBTypes, false, productColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, productDBTypes, false, productColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	queries.Assign(&b.RegistryID, a.ID)
+	queries.Assign(&c.RegistryID, a.ID)
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	product, err := a.Products().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range product {
+		if queries.Equal(v.RegistryID, b.RegistryID) {
+			bFound = true
+		}
+		if queries.Equal(v.RegistryID, c.RegistryID) {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := RegistrySlice{&a}
+	if err = a.L.LoadProducts(ctx, tx, false, (*[]*Registry)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.Products); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.Products = nil
+	if err = a.L.LoadProducts(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.Products); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", product)
+	}
+}
+
 func testRegistryToManyRegistryBuilds(t *testing.T) {
 	var err error
 	ctx := context.Background()
@@ -724,6 +801,257 @@ func testRegistryToManyRegistryManufacturers(t *testing.T) {
 
 	if t.Failed() {
 		t.Logf("%#v", registryManufacturer)
+	}
+}
+
+func testRegistryToManyAddOpProducts(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e Product
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*Product{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*Product{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddProducts(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if !queries.Equal(a.ID, first.RegistryID) {
+			t.Error("foreign key was wrong value", a.ID, first.RegistryID)
+		}
+		if !queries.Equal(a.ID, second.RegistryID) {
+			t.Error("foreign key was wrong value", a.ID, second.RegistryID)
+		}
+
+		if first.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.Products[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.Products[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.Products().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
+
+func testRegistryToManySetOpProducts(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e Product
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*Product{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err = a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.SetProducts(ctx, tx, false, &b, &c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.Products().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.SetProducts(ctx, tx, true, &d, &e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.Products().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.RegistryID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.RegistryID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+	if !queries.Equal(a.ID, d.RegistryID) {
+		t.Error("foreign key was wrong value", a.ID, d.RegistryID)
+	}
+	if !queries.Equal(a.ID, e.RegistryID) {
+		t.Error("foreign key was wrong value", a.ID, e.RegistryID)
+	}
+
+	if b.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.Registry != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+	if e.R.Registry != &a {
+		t.Error("relationship was not added properly to the foreign struct")
+	}
+
+	if a.R.Products[0] != &d {
+		t.Error("relationship struct slice not set to correct value")
+	}
+	if a.R.Products[1] != &e {
+		t.Error("relationship struct slice not set to correct value")
+	}
+}
+
+func testRegistryToManyRemoveOpProducts(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e Product
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*Product{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	err = a.AddProducts(ctx, tx, true, foreigners...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err := a.Products().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 4 {
+		t.Error("count was wrong:", count)
+	}
+
+	err = a.RemoveProducts(ctx, tx, foreigners[:2]...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count, err = a.Products().Count(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Error("count was wrong:", count)
+	}
+
+	if !queries.IsValuerNil(b.RegistryID) {
+		t.Error("want b's foreign key value to be nil")
+	}
+	if !queries.IsValuerNil(c.RegistryID) {
+		t.Error("want c's foreign key value to be nil")
+	}
+
+	if b.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if c.R.Registry != nil {
+		t.Error("relationship was not removed properly from the foreign struct")
+	}
+	if d.R.Registry != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+	if e.R.Registry != &a {
+		t.Error("relationship to a should have been preserved")
+	}
+
+	if len(a.R.Products) != 2 {
+		t.Error("should have preserved two relationships")
+	}
+
+	// Removal doesn't do a stable deletion for performance so we have to flip the order
+	if a.R.Products[1] != &d {
+		t.Error("relationship to d should have been preserved")
+	}
+	if a.R.Products[0] != &e {
+		t.Error("relationship to e should have been preserved")
 	}
 }
 

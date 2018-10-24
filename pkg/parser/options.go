@@ -8,9 +8,10 @@ import (
 
 // Options is a configuration for parser container.
 type Options struct {
-	Logger *zap.Logger
-	Debug  bool
-	Limit  uint
+	Logger     *zap.Logger
+	Debug      bool
+	Limit      uint
+	AutoSearch bool
 }
 
 // Pages is a configuration for dari.kz urls to be parsed.

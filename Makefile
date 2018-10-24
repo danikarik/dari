@@ -15,12 +15,17 @@ build-win: ## Build binaries for windows
 dev: ## Run parser limited by 300 records
 	@echo 'Starting parser...'
 	@echo '' > ./logs/stdout.log
-	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --limit=1
+	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --limit=1 --search=true
+
+test-id: ## Run single page parser by id
+	@echo 'Starting parser...'
+	@echo '' > ./logs/stdout.log
+	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --test.id=148633
 
 prod: ## Run parser without limit
 	@echo 'Starting parser...'
 	@echo '' > ./logs/stdout.log
-	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log
+	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --search=true
 
 dump: ## Dump database models
 	@sqlboiler -o pkg/models -p models --wipe mysql

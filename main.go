@@ -17,6 +17,8 @@ var (
 	stdout     = flag.String("stdout", "", "Custom stderr path")
 	connString = flag.String("conn", "", "Connection string")
 	limit      = flag.Uint("limit", 0, "Limit page number for parser")
+	autoSearch = flag.Bool("search", false, "Enable auto search")
+	testID     = flag.String("test.id", "", "Test record id")
 	cfg        = zap.NewProductionConfig()
 )
 
@@ -50,15 +52,23 @@ func main() {
 		logger.Fatal("try to connect", zap.Error(err))
 	}
 	p, err := parser.New(db, parser.Options{
-		Logger: logger,
-		Debug:  *debug,
-		Limit:  *limit,
+		Logger:     logger,
+		Debug:      *debug,
+		Limit:      *limit,
+		AutoSearch: *autoSearch,
 	})
 	if err != nil {
 		logger.Fatal("new parser", zap.Error(err))
 	}
-	err = p.Run()
-	if err != nil {
-		logger.Fatal("run parser", zap.Error(err))
+	if *testID != "" {
+		err = p.Single(*testID)
+		if err != nil {
+			logger.Fatal("single parser", zap.Error(err))
+		}
+	} else {
+		err = p.Run()
+		if err != nil {
+			logger.Fatal("run parser", zap.Error(err))
+		}
 	}
 }

@@ -65,11 +65,13 @@ var RegistryColumns = struct {
 // RegistryRels is where relationship names are stored.
 var RegistryRels = struct {
 	RegistryStatus        string
+	Products              string
 	RegistryBuilds        string
 	RegistryFieldStats    string
 	RegistryManufacturers string
 }{
 	RegistryStatus:        "RegistryStatus",
+	Products:              "Products",
 	RegistryBuilds:        "RegistryBuilds",
 	RegistryFieldStats:    "RegistryFieldStats",
 	RegistryManufacturers: "RegistryManufacturers",
@@ -78,6 +80,7 @@ var RegistryRels = struct {
 // registryR is where relationships are stored.
 type registryR struct {
 	RegistryStatus        *RegistryStatus
+	Products              ProductSlice
 	RegistryBuilds        RegistryBuildSlice
 	RegistryFieldStats    RegistryFieldStatSlice
 	RegistryManufacturers RegistryManufacturerSlice
@@ -347,6 +350,27 @@ func (o *Registry) RegistryStatus(mods ...qm.QueryMod) registryStatusQuery {
 	return query
 }
 
+// Products retrieves all the product's Products with an executor.
+func (o *Registry) Products(mods ...qm.QueryMod) productQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`products`.`registry_id`=?", o.ID),
+	)
+
+	query := Products(queryMods...)
+	queries.SetFrom(query.Query, "`products`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`products`.*"})
+	}
+
+	return query
+}
+
 // RegistryBuilds retrieves all the registry_build's RegistryBuilds with an executor.
 func (o *Registry) RegistryBuilds(mods ...qm.QueryMod) registryBuildQuery {
 	var queryMods []qm.QueryMod
@@ -497,6 +521,97 @@ func (registryL) LoadRegistryStatus(ctx context.Context, e boil.ContextExecutor,
 					foreign.R = &registryStatusR{}
 				}
 				foreign.R.Registries = append(foreign.R.Registries, local)
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadProducts allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (registryL) LoadProducts(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistry interface{}, mods queries.Applicator) error {
+	var slice []*Registry
+	var object *Registry
+
+	if singular {
+		object = maybeRegistry.(*Registry)
+	} else {
+		slice = *maybeRegistry.(*[]*Registry)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.ID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`products`), qm.WhereIn(`registry_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load products")
+	}
+
+	var resultSlice []*Product
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice products")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on products")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for products")
+	}
+
+	if len(productAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.Products = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &productR{}
+			}
+			foreign.R.Registry = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if queries.Equal(local.ID, foreign.RegistryID) {
+				local.R.Products = append(local.R.Products, foreign)
+				if foreign.R == nil {
+					foreign.R = &productR{}
+				}
+				foreign.R.Registry = local
 				break
 			}
 		}
@@ -820,6 +935,129 @@ func (o *Registry) SetRegistryStatus(ctx context.Context, exec boil.ContextExecu
 		}
 	} else {
 		related.R.Registries = append(related.R.Registries, o)
+	}
+
+	return nil
+}
+
+// AddProducts adds the given related objects to the existing relationships
+// of the registry, optionally inserting them as new records.
+// Appends related to o.R.Products.
+// Sets related.R.Registry appropriately.
+func (o *Registry) AddProducts(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Product) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			queries.Assign(&rel.RegistryID, o.ID)
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `products` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"registry_id"}),
+				strmangle.WhereClause("`", "`", 0, productPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			queries.Assign(&rel.RegistryID, o.ID)
+		}
+	}
+
+	if o.R == nil {
+		o.R = &registryR{
+			Products: related,
+		}
+	} else {
+		o.R.Products = append(o.R.Products, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &productR{
+				Registry: o,
+			}
+		} else {
+			rel.R.Registry = o
+		}
+	}
+	return nil
+}
+
+// SetProducts removes all previously related items of the
+// registry replacing them completely with the passed
+// in related items, optionally inserting them as new records.
+// Sets o.R.Registry's Products accordingly.
+// Replaces o.R.Products with related.
+// Sets related.R.Registry's Products accordingly.
+func (o *Registry) SetProducts(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Product) error {
+	query := "update `products` set `registry_id` = null where `registry_id` = ?"
+	values := []interface{}{o.ID}
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, query)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	_, err := exec.ExecContext(ctx, query, values...)
+	if err != nil {
+		return errors.Wrap(err, "failed to remove relationships before set")
+	}
+
+	if o.R != nil {
+		for _, rel := range o.R.Products {
+			queries.SetScanner(&rel.RegistryID, nil)
+			if rel.R == nil {
+				continue
+			}
+
+			rel.R.Registry = nil
+		}
+
+		o.R.Products = nil
+	}
+	return o.AddProducts(ctx, exec, insert, related...)
+}
+
+// RemoveProducts relationships from objects passed in.
+// Removes related items from R.Products (uses pointer comparison, removal does not keep order)
+// Sets related.R.Registry.
+func (o *Registry) RemoveProducts(ctx context.Context, exec boil.ContextExecutor, related ...*Product) error {
+	var err error
+	for _, rel := range related {
+		queries.SetScanner(&rel.RegistryID, nil)
+		if rel.R != nil {
+			rel.R.Registry = nil
+		}
+		if _, err = rel.Update(ctx, exec, boil.Whitelist("registry_id")); err != nil {
+			return err
+		}
+	}
+	if o.R == nil {
+		return nil
+	}
+
+	for _, rel := range related {
+		for i, ri := range o.R.Products {
+			if rel != ri {
+				continue
+			}
+
+			ln := len(o.R.Products)
+			if ln > 1 && i < ln-1 {
+				o.R.Products[i] = o.R.Products[ln-1]
+			}
+			o.R.Products = o.R.Products[:ln-1]
+			break
+		}
 	}
 
 	return nil

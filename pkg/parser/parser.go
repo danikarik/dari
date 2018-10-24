@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bitbucket.org/kit-systems/dari/pkg/compare"
 	"encoding/xml"
 	"fmt"
 	"strconv"
@@ -30,6 +31,7 @@ type Parser struct {
 	regs      models.RegistrySlice
 	bar       *pb.ProgressBar
 	journal   *models.RegistryJournal
+	autoSearch bool
 }
 
 // New creates new parser instance.
@@ -52,6 +54,7 @@ func New(db *database.DB, opts Options) (*Parser, error) {
 	p.regs = make(models.RegistrySlice, 0)
 	p.db = db
 	p.journal = &models.RegistryJournal{}
+	p.autoSearch = opts.AutoSearch
 	return &p, nil
 }
 
@@ -101,6 +104,36 @@ func (p *Parser) Run() error {
 		return err
 	}
 
+	err = p.beginSearch()
+	if err != nil {
+		return nil
+	}
+
+	return nil
+}
+
+// Single launch single page parser.
+func (p *Parser) Single(ID string) error {
+	p.meta.Records = "1"
+	p.startBar(1, "Reading single page...")
+	rec, err := p.visitPrint(ID)
+	p.incrementBar()
+	if err != nil {
+		rec.RegistryStatusID = uint(dict.ParsingFailed)
+		p.journal.FailedCount++
+		p.logger.Error(
+			"registry",
+			zap.String("link", rec.Link),
+			zap.String("number", rec.Number),
+			zap.Error(err),
+		)
+		return err
+	}
+	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", 1, p.journal.FailedCount))
+	err = p.updateDatabase()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -259,6 +292,8 @@ func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
 
 func parsePage(r *models.Registry, e *colly.HTMLElement) error {
 	var g run.Group
+	rel := r.R.NewStruct()
+	r.R = rel
 	e.ForEach("table", func(i int, el *colly.HTMLElement) {
 		// Основные данные
 		if i == dict.MainTableIndex {
@@ -269,7 +304,8 @@ func parsePage(r *models.Registry, e *colly.HTMLElement) error {
 		// Производители
 		if i == dict.ManufacturesTableIndex {
 			g.Add(func() error {
-				return parseManufacturesTable(r, el)
+				err := parseManufacturesTable(r, el)
+				return err
 			}, func(err error) {})
 		}
 		// Комплектность
@@ -328,7 +364,6 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 
 func parseManufacturesTable(r *models.Registry, el *colly.HTMLElement) error {
 	var result error
-	var rel = r.R.NewStruct()
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
 		var mType string
 		if j != dict.TableHeaderIndex {
@@ -348,18 +383,16 @@ func parseManufacturesTable(r *models.Registry, el *colly.HTMLElement) error {
 					break
 				}
 			})
-			if mType == dict.ManufacturerRequired {
-				rel.RegistryManufacturers = append(rel.RegistryManufacturers, &m)
+			if compare.String(mType, dict.ManufacturerRequired) {
+				r.R.RegistryManufacturers = append(r.R.RegistryManufacturers, &m)
 			}
 		}
 	})
-	r.R = rel
 	return result
 }
 
 func parsePartsTable(r *models.Registry, el *colly.HTMLElement) error {
 	var result error
-	var rel = r.R.NewStruct()
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
 		if j != dict.TableHeaderIndex {
 			var b models.RegistryBuild
@@ -383,9 +416,8 @@ func parsePartsTable(r *models.Registry, el *colly.HTMLElement) error {
 					break
 				}
 			})
-			rel.RegistryBuilds = append(rel.RegistryBuilds, &b)
+			r.R.RegistryBuilds = append(r.R.RegistryBuilds, &b)
 		}
 	})
-	r.R = rel
 	return result
 }

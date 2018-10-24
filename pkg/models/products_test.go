@@ -1230,6 +1230,57 @@ func testProductToOnePricelistUsingPricelist(t *testing.T) {
 	}
 }
 
+func testProductToOneRegistryUsingRegistry(t *testing.T) {
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var local Product
+	var foreign Registry
+
+	seed := randomize.NewSeed()
+	if err := randomize.Struct(seed, &local, productDBTypes, true, productColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Product struct: %s", err)
+	}
+	if err := randomize.Struct(seed, &foreign, registryDBTypes, false, registryColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Registry struct: %s", err)
+	}
+
+	if err := foreign.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	queries.Assign(&local.RegistryID, foreign.ID)
+	if err := local.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	check, err := local.Registry().One(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !queries.Equal(check.ID, foreign.ID) {
+		t.Errorf("want: %v, got %v", foreign.ID, check.ID)
+	}
+
+	slice := ProductSlice{&local}
+	if err = local.L.LoadRegistry(ctx, tx, false, (*[]*Product)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.Registry == nil {
+		t.Error("struct should have been eager loaded")
+	}
+
+	local.R.Registry = nil
+	if err = local.L.LoadRegistry(ctx, tx, true, &local, nil); err != nil {
+		t.Fatal(err)
+	}
+	if local.R.Registry == nil {
+		t.Error("struct should have been eager loaded")
+	}
+}
+
 func testProductToOneSubcategoryUsingSubcategory(t *testing.T) {
 	ctx := context.Background()
 	tx := MustTx(boil.BeginTx(ctx, nil))
@@ -1618,6 +1669,115 @@ func testProductToOneSetOpPricelistUsingPricelist(t *testing.T) {
 		}
 	}
 }
+func testProductToOneSetOpRegistryUsingRegistry(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Product
+	var b, c Registry
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &b, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	for i, x := range []*Registry{&b, &c} {
+		err = a.SetRegistry(ctx, tx, i != 0, x)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if a.R.Registry != x {
+			t.Error("relationship struct not set to correct value")
+		}
+
+		if x.R.Products[0] != &a {
+			t.Error("failed to append to foreign relationship struct")
+		}
+		if !queries.Equal(a.RegistryID, x.ID) {
+			t.Error("foreign key was wrong value", a.RegistryID)
+		}
+
+		zero := reflect.Zero(reflect.TypeOf(a.RegistryID))
+		reflect.Indirect(reflect.ValueOf(&a.RegistryID)).Set(zero)
+
+		if err = a.Reload(ctx, tx); err != nil {
+			t.Fatal("failed to reload", err)
+		}
+
+		if !queries.Equal(a.RegistryID, x.ID) {
+			t.Error("foreign key was wrong value", a.RegistryID, x.ID)
+		}
+	}
+}
+
+func testProductToOneRemoveOpRegistryUsingRegistry(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Product
+	var b Registry
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &b, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.SetRegistry(ctx, tx, true, &b); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.RemoveRegistry(ctx, tx, &b); err != nil {
+		t.Error("failed to remove relationship")
+	}
+
+	count, err := a.Registry().Count(ctx, tx)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 0 {
+		t.Error("want no relationships remaining")
+	}
+
+	if a.R.Registry != nil {
+		t.Error("R struct entry should be nil")
+	}
+
+	if !queries.IsValuerNil(a.RegistryID) {
+		t.Error("foreign key value should be nil")
+	}
+
+	if len(b.R.Products) != 0 {
+		t.Error("failed to remove a from b's relationships")
+	}
+}
+
 func testProductToOneSetOpSubcategoryUsingSubcategory(t *testing.T) {
 	var err error
 
@@ -1801,7 +1961,7 @@ func testProductsSelect(t *testing.T) {
 }
 
 var (
-	productDBTypes = map[string]string{`ActualDate`: `int`, `BaseName`: `text`, `BasePrice`: `decimal`, `CategoryID`: `int`, `CreatedAt`: `timestamp`, `CurrencyID`: `int`, `DeletedAt`: `timestamp`, `ID`: `int`, `ManufacturerID`: `int`, `MaterialID`: `int`, `ModelNumber`: `varchar`, `PartNumber`: `varchar`, `PricelistID`: `int`, `RegistryLink`: `varchar`, `SubcategoryID`: `int`, `UpdatedAt`: `timestamp`}
+	productDBTypes = map[string]string{`ActualDate`: `int`, `BaseName`: `text`, `BasePrice`: `decimal`, `CategoryID`: `int`, `CreatedAt`: `timestamp`, `CurrencyID`: `int`, `DeletedAt`: `timestamp`, `ID`: `int`, `ManufacturerID`: `int`, `MaterialID`: `int`, `ModelNumber`: `varchar`, `PartNumber`: `varchar`, `PricelistID`: `int`, `RegistryID`: `int`, `RegistryLink`: `varchar`, `SubcategoryID`: `int`, `UpdatedAt`: `timestamp`}
 	_              = bytes.MinRead
 )
 
