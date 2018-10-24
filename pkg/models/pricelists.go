@@ -592,7 +592,7 @@ func (pricelistL) LoadProducts(ctx context.Context, e boil.ContextExecutor, sing
 			}
 
 			for _, a := range args {
-				if a == obj.ID {
+				if queries.Equal(a, obj.ID) {
 					continue Outer
 				}
 			}
@@ -643,7 +643,7 @@ func (pricelistL) LoadProducts(ctx context.Context, e boil.ContextExecutor, sing
 
 	for _, foreign := range resultSlice {
 		for _, local := range slice {
-			if local.ID == foreign.PricelistID {
+			if queries.Equal(local.ID, foreign.PricelistID) {
 				local.R.Products = append(local.R.Products, foreign)
 				if foreign.R == nil {
 					foreign.R = &productR{}
@@ -759,7 +759,7 @@ func (o *Pricelist) AddProducts(ctx context.Context, exec boil.ContextExecutor, 
 	var err error
 	for _, rel := range related {
 		if insert {
-			rel.PricelistID = o.ID
+			queries.Assign(&rel.PricelistID, o.ID)
 			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
 				return errors.Wrap(err, "failed to insert into foreign table")
 			}
@@ -780,7 +780,7 @@ func (o *Pricelist) AddProducts(ctx context.Context, exec boil.ContextExecutor, 
 				return errors.Wrap(err, "failed to update foreign table")
 			}
 
-			rel.PricelistID = o.ID
+			queries.Assign(&rel.PricelistID, o.ID)
 		}
 	}
 
@@ -801,6 +801,76 @@ func (o *Pricelist) AddProducts(ctx context.Context, exec boil.ContextExecutor, 
 			rel.R.Pricelist = o
 		}
 	}
+	return nil
+}
+
+// SetProducts removes all previously related items of the
+// pricelist replacing them completely with the passed
+// in related items, optionally inserting them as new records.
+// Sets o.R.Pricelist's Products accordingly.
+// Replaces o.R.Products with related.
+// Sets related.R.Pricelist's Products accordingly.
+func (o *Pricelist) SetProducts(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Product) error {
+	query := "update `products` set `pricelist_id` = null where `pricelist_id` = ?"
+	values := []interface{}{o.ID}
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, query)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	_, err := exec.ExecContext(ctx, query, values...)
+	if err != nil {
+		return errors.Wrap(err, "failed to remove relationships before set")
+	}
+
+	if o.R != nil {
+		for _, rel := range o.R.Products {
+			queries.SetScanner(&rel.PricelistID, nil)
+			if rel.R == nil {
+				continue
+			}
+
+			rel.R.Pricelist = nil
+		}
+
+		o.R.Products = nil
+	}
+	return o.AddProducts(ctx, exec, insert, related...)
+}
+
+// RemoveProducts relationships from objects passed in.
+// Removes related items from R.Products (uses pointer comparison, removal does not keep order)
+// Sets related.R.Pricelist.
+func (o *Pricelist) RemoveProducts(ctx context.Context, exec boil.ContextExecutor, related ...*Product) error {
+	var err error
+	for _, rel := range related {
+		queries.SetScanner(&rel.PricelistID, nil)
+		if rel.R != nil {
+			rel.R.Pricelist = nil
+		}
+		if _, err = rel.Update(ctx, exec, boil.Whitelist("pricelist_id")); err != nil {
+			return err
+		}
+	}
+	if o.R == nil {
+		return nil
+	}
+
+	for _, rel := range related {
+		for i, ri := range o.R.Products {
+			if rel != ri {
+				continue
+			}
+
+			ln := len(o.R.Products)
+			if ln > 1 && i < ln-1 {
+				o.R.Products[i] = o.R.Products[ln-1]
+			}
+			o.R.Products = o.R.Products[:ln-1]
+			break
+		}
+	}
+
 	return nil
 }
 

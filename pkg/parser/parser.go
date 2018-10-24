@@ -63,6 +63,16 @@ func (p *Parser) Run() error {
 	var err error
 
 	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = fmt.Errorf("run: %v", r)
+			}
+		}
+	}()
+
+	defer func() {
 		if derr := p.logger.Sync(); derr != nil {
 			p.logger.Error("sync", zap.Error(derr))
 		}
@@ -133,6 +143,10 @@ func (p *Parser) Single(ID string) error {
 	err = p.updateDatabase()
 	if err != nil {
 		return err
+	}
+	err = p.beginSearch()
+	if err != nil {
+		return nil
 	}
 	return nil
 }
@@ -232,7 +246,9 @@ func (p *Parser) collectRecords() error {
 		rec, err := p.visitPrint(r.ID)
 		p.incrementBar()
 		if err != nil {
-			rec.RegistryStatusID = uint(dict.ParsingFailed)
+			if rec != nil {
+				rec.RegistryStatusID = uint(dict.ParsingFailed)
+			}
 			p.journal.FailedCount++
 			p.logger.Error(
 				"registry",
@@ -365,7 +381,6 @@ func parseMainTable(r *models.Registry, el *colly.HTMLElement) error {
 func parseManufacturesTable(r *models.Registry, el *colly.HTMLElement) error {
 	var result error
 	el.ForEach("tbody tr", func(j int, ch *colly.HTMLElement) {
-		var mType string
 		if j != dict.TableHeaderIndex {
 			var m models.RegistryManufacturer
 			ch.ForEach("td", func(t int, td *colly.HTMLElement) {
@@ -377,13 +392,13 @@ func parseManufacturesTable(r *models.Registry, el *colly.HTMLElement) error {
 					m.Country = td.Text
 					break
 				case dict.ManufacturerType:
-					mType = td.Text
+					m.Type = td.Text
 					break
 				default:
 					break
 				}
 			})
-			if compare.String(mType, dict.ManufacturerRequired) {
+			if compare.String(m.Type, dict.ManufacturerRequired) {
 				r.R.RegistryManufacturers = append(r.R.RegistryManufacturers, &m)
 			}
 		}

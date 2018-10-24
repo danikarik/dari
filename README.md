@@ -35,6 +35,10 @@ make dev
 make prod
 ```
 
+## Notes
+
+- Показать тип совпадения: оборудование / комплектующие
+
 ## Author
 
 [@danikarik](https://github.com/danikarik)

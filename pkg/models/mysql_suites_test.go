@@ -46,6 +46,8 @@ func TestUpsert(t *testing.T) {
 
 	t.Run("RegistryManufacturers", testRegistryManufacturersUpsert)
 
+	t.Run("RegistryRecommendations", testRegistryRecommendationsUpsert)
+
 	t.Run("RegistryStatuses", testRegistryStatusesUpsert)
 
 	t.Run("Roles", testRolesUpsert)

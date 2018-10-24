@@ -804,6 +804,84 @@ func testRegistryToManyRegistryManufacturers(t *testing.T) {
 	}
 }
 
+func testRegistryToManyRegistryRecommendations(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c RegistryRecommendation
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, true, registryColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Registry struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, registryRecommendationDBTypes, false, registryRecommendationColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryRecommendationDBTypes, false, registryRecommendationColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	b.RegistryID = a.ID
+	c.RegistryID = a.ID
+
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	registryRecommendation, err := a.RegistryRecommendations().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range registryRecommendation {
+		if v.RegistryID == b.RegistryID {
+			bFound = true
+		}
+		if v.RegistryID == c.RegistryID {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := RegistrySlice{&a}
+	if err = a.L.LoadRegistryRecommendations(ctx, tx, false, (*[]*Registry)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryRecommendations); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.RegistryRecommendations = nil
+	if err = a.L.LoadRegistryRecommendations(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryRecommendations); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", registryRecommendation)
+	}
+}
+
 func testRegistryToManyAddOpProducts(t *testing.T) {
 	var err error
 
@@ -1448,6 +1526,81 @@ func testRegistryToManyAddOpRegistryManufacturers(t *testing.T) {
 		}
 
 		count, err := a.RegistryManufacturers().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
+func testRegistryToManyAddOpRegistryRecommendations(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Registry
+	var b, c, d, e RegistryRecommendation
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, registryDBTypes, false, strmangle.SetComplement(registryPrimaryKeyColumns, registryColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryRecommendation{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryRecommendationDBTypes, false, strmangle.SetComplement(registryRecommendationPrimaryKeyColumns, registryRecommendationColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*RegistryRecommendation{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddRegistryRecommendations(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if a.ID != first.RegistryID {
+			t.Error("foreign key was wrong value", a.ID, first.RegistryID)
+		}
+		if a.ID != second.RegistryID {
+			t.Error("foreign key was wrong value", a.ID, second.RegistryID)
+		}
+
+		if first.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.Registry != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.RegistryRecommendations[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.RegistryRecommendations[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.RegistryRecommendations().Count(ctx, tx)
 		if err != nil {
 			t.Fatal(err)
 		}

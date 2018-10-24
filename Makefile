@@ -20,7 +20,7 @@ dev: ## Run parser limited by 300 records
 test-id: ## Run single page parser by id
 	@echo 'Starting parser...'
 	@echo '' > ./logs/stdout.log
-	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --test.id=148633
+	@bin/parser --conn="root:daniyar@/mitdb?parseTime=true&loc=Local" --stdout=./logs/stdout.log --test.id=148633 --search=true
 
 prod: ## Run parser without limit
 	@echo 'Starting parser...'

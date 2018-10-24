@@ -64,26 +64,29 @@ var RegistryColumns = struct {
 
 // RegistryRels is where relationship names are stored.
 var RegistryRels = struct {
-	RegistryStatus        string
-	Products              string
-	RegistryBuilds        string
-	RegistryFieldStats    string
-	RegistryManufacturers string
+	RegistryStatus          string
+	Products                string
+	RegistryBuilds          string
+	RegistryFieldStats      string
+	RegistryManufacturers   string
+	RegistryRecommendations string
 }{
-	RegistryStatus:        "RegistryStatus",
-	Products:              "Products",
-	RegistryBuilds:        "RegistryBuilds",
-	RegistryFieldStats:    "RegistryFieldStats",
-	RegistryManufacturers: "RegistryManufacturers",
+	RegistryStatus:          "RegistryStatus",
+	Products:                "Products",
+	RegistryBuilds:          "RegistryBuilds",
+	RegistryFieldStats:      "RegistryFieldStats",
+	RegistryManufacturers:   "RegistryManufacturers",
+	RegistryRecommendations: "RegistryRecommendations",
 }
 
 // registryR is where relationships are stored.
 type registryR struct {
-	RegistryStatus        *RegistryStatus
-	Products              ProductSlice
-	RegistryBuilds        RegistryBuildSlice
-	RegistryFieldStats    RegistryFieldStatSlice
-	RegistryManufacturers RegistryManufacturerSlice
+	RegistryStatus          *RegistryStatus
+	Products                ProductSlice
+	RegistryBuilds          RegistryBuildSlice
+	RegistryFieldStats      RegistryFieldStatSlice
+	RegistryManufacturers   RegistryManufacturerSlice
+	RegistryRecommendations RegistryRecommendationSlice
 }
 
 // NewStruct creates a new relationship struct
@@ -429,6 +432,27 @@ func (o *Registry) RegistryManufacturers(mods ...qm.QueryMod) registryManufactur
 
 	if len(queries.GetSelect(query.Query)) == 0 {
 		queries.SetSelect(query.Query, []string{"`registry_manufacturers`.*"})
+	}
+
+	return query
+}
+
+// RegistryRecommendations retrieves all the registry_recommendation's RegistryRecommendations with an executor.
+func (o *Registry) RegistryRecommendations(mods ...qm.QueryMod) registryRecommendationQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`registry_recommendations`.`registry_id`=?", o.ID),
+	)
+
+	query := RegistryRecommendations(queryMods...)
+	queries.SetFrom(query.Query, "`registry_recommendations`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`registry_recommendations`.*"})
 	}
 
 	return query
@@ -893,6 +917,97 @@ func (registryL) LoadRegistryManufacturers(ctx context.Context, e boil.ContextEx
 	return nil
 }
 
+// LoadRegistryRecommendations allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (registryL) LoadRegistryRecommendations(ctx context.Context, e boil.ContextExecutor, singular bool, maybeRegistry interface{}, mods queries.Applicator) error {
+	var slice []*Registry
+	var object *Registry
+
+	if singular {
+		object = maybeRegistry.(*Registry)
+	} else {
+		slice = *maybeRegistry.(*[]*Registry)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &registryR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &registryR{}
+			}
+
+			for _, a := range args {
+				if a == obj.ID {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registry_recommendations`), qm.WhereIn(`registry_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load registry_recommendations")
+	}
+
+	var resultSlice []*RegistryRecommendation
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice registry_recommendations")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on registry_recommendations")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registry_recommendations")
+	}
+
+	if len(registryRecommendationAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.RegistryRecommendations = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &registryRecommendationR{}
+			}
+			foreign.R.Registry = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.RegistryID {
+				local.R.RegistryRecommendations = append(local.R.RegistryRecommendations, foreign)
+				if foreign.R == nil {
+					foreign.R = &registryRecommendationR{}
+				}
+				foreign.R.Registry = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // SetRegistryStatus of the registry to the related item.
 // Sets o.R.RegistryStatus to related.
 // Adds o to related.R.Registries.
@@ -1283,6 +1398,59 @@ func (o *Registry) AddRegistryManufacturers(ctx context.Context, exec boil.Conte
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &registryManufacturerR{
+				Registry: o,
+			}
+		} else {
+			rel.R.Registry = o
+		}
+	}
+	return nil
+}
+
+// AddRegistryRecommendations adds the given related objects to the existing relationships
+// of the registry, optionally inserting them as new records.
+// Appends related to o.R.RegistryRecommendations.
+// Sets related.R.Registry appropriately.
+func (o *Registry) AddRegistryRecommendations(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryRecommendation) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.RegistryID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `registry_recommendations` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"registry_id"}),
+				strmangle.WhereClause("`", "`", 0, registryRecommendationPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.RegistryID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &registryR{
+			RegistryRecommendations: related,
+		}
+	} else {
+		o.R.RegistryRecommendations = append(o.R.RegistryRecommendations, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &registryRecommendationR{
 				Registry: o,
 			}
 		} else {

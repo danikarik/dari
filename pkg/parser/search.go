@@ -23,5 +23,12 @@ func (p *Parser) beginSearch() error {
 		p.incrementBar()
 	}
 	p.finishBar("Done.")
+	p.startBar(1, "Creating notifications...")
+	err = p.db.CreateNotifications(prods)
+	p.incrementBar()
+	if err != nil {
+		return err
+	}
+	p.finishBar("Done.")
 	return nil
 }

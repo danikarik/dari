@@ -25,7 +25,7 @@ import (
 // Product is an object representing the database table.
 type Product struct {
 	ID             uint          `boil:"id" json:"id" toml:"id" yaml:"id"`
-	PricelistID    uint          `boil:"pricelist_id" json:"pricelist_id" toml:"pricelist_id" yaml:"pricelist_id"`
+	PricelistID    null.Uint     `boil:"pricelist_id" json:"pricelist_id,omitempty" toml:"pricelist_id" yaml:"pricelist_id,omitempty"`
 	RegistryLink   null.String   `boil:"registry_link" json:"registry_link,omitempty" toml:"registry_link" yaml:"registry_link,omitempty"`
 	ActualDate     null.Int      `boil:"actual_date" json:"actual_date,omitempty" toml:"actual_date" yaml:"actual_date,omitempty"`
 	PartNumber     null.String   `boil:"part_number" json:"part_number,omitempty" toml:"part_number" yaml:"part_number,omitempty"`
@@ -86,38 +86,41 @@ var ProductColumns = struct {
 
 // ProductRels is where relationship names are stored.
 var ProductRels = struct {
-	Category     string
-	Currency     string
-	Manufacturer string
-	Material     string
-	Pricelist    string
-	Registry     string
-	Subcategory  string
-	Descriptions string
-	Offers       string
+	Category                string
+	Currency                string
+	Manufacturer            string
+	Material                string
+	Pricelist               string
+	Registry                string
+	Subcategory             string
+	Descriptions            string
+	Offers                  string
+	RegistryRecommendations string
 }{
-	Category:     "Category",
-	Currency:     "Currency",
-	Manufacturer: "Manufacturer",
-	Material:     "Material",
-	Pricelist:    "Pricelist",
-	Registry:     "Registry",
-	Subcategory:  "Subcategory",
-	Descriptions: "Descriptions",
-	Offers:       "Offers",
+	Category:                "Category",
+	Currency:                "Currency",
+	Manufacturer:            "Manufacturer",
+	Material:                "Material",
+	Pricelist:               "Pricelist",
+	Registry:                "Registry",
+	Subcategory:             "Subcategory",
+	Descriptions:            "Descriptions",
+	Offers:                  "Offers",
+	RegistryRecommendations: "RegistryRecommendations",
 }
 
 // productR is where relationships are stored.
 type productR struct {
-	Category     *Category
-	Currency     *Currency
-	Manufacturer *Manufacturer
-	Material     *Material
-	Pricelist    *Pricelist
-	Registry     *Registry
-	Subcategory  *Subcategory
-	Descriptions DescriptionSlice
-	Offers       OfferSlice
+	Category                *Category
+	Currency                *Currency
+	Manufacturer            *Manufacturer
+	Material                *Material
+	Pricelist               *Pricelist
+	Registry                *Registry
+	Subcategory             *Subcategory
+	Descriptions            DescriptionSlice
+	Offers                  OfferSlice
+	RegistryRecommendations RegistryRecommendationSlice
 }
 
 // NewStruct creates a new relationship struct
@@ -505,6 +508,27 @@ func (o *Product) Offers(mods ...qm.QueryMod) offerQuery {
 
 	if len(queries.GetSelect(query.Query)) == 0 {
 		queries.SetSelect(query.Query, []string{"`offers`.*"})
+	}
+
+	return query
+}
+
+// RegistryRecommendations retrieves all the registry_recommendation's RegistryRecommendations with an executor.
+func (o *Product) RegistryRecommendations(mods ...qm.QueryMod) registryRecommendationQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`registry_recommendations`.`product_id`=?", o.ID),
+	)
+
+	query := RegistryRecommendations(queryMods...)
+	queries.SetFrom(query.Query, "`registry_recommendations`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`registry_recommendations`.*"})
 	}
 
 	return query
@@ -916,7 +940,7 @@ func (productL) LoadPricelist(ctx context.Context, e boil.ContextExecutor, singu
 			}
 
 			for _, a := range args {
-				if a == obj.PricelistID {
+				if queries.Equal(a, obj.PricelistID) {
 					continue Outer
 				}
 			}
@@ -971,7 +995,7 @@ func (productL) LoadPricelist(ctx context.Context, e boil.ContextExecutor, singu
 
 	for _, local := range slice {
 		for _, foreign := range resultSlice {
-			if local.PricelistID == foreign.ID {
+			if queries.Equal(local.PricelistID, foreign.ID) {
 				local.R.Pricelist = foreign
 				if foreign.R == nil {
 					foreign.R = &pricelistR{}
@@ -1357,6 +1381,97 @@ func (productL) LoadOffers(ctx context.Context, e boil.ContextExecutor, singular
 	return nil
 }
 
+// LoadRegistryRecommendations allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (productL) LoadRegistryRecommendations(ctx context.Context, e boil.ContextExecutor, singular bool, maybeProduct interface{}, mods queries.Applicator) error {
+	var slice []*Product
+	var object *Product
+
+	if singular {
+		object = maybeProduct.(*Product)
+	} else {
+		slice = *maybeProduct.(*[]*Product)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &productR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &productR{}
+			}
+
+			for _, a := range args {
+				if a == obj.ID {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`registry_recommendations`), qm.WhereIn(`product_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load registry_recommendations")
+	}
+
+	var resultSlice []*RegistryRecommendation
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice registry_recommendations")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on registry_recommendations")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for registry_recommendations")
+	}
+
+	if len(registryRecommendationAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.RegistryRecommendations = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &registryRecommendationR{}
+			}
+			foreign.R.Product = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ID == foreign.ProductID {
+				local.R.RegistryRecommendations = append(local.R.RegistryRecommendations, foreign)
+				if foreign.R == nil {
+					foreign.R = &registryRecommendationR{}
+				}
+				foreign.R.Product = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // SetCategory of the product to the related item.
 // Sets o.R.Category to related.
 // Adds o to related.R.Products.
@@ -1603,7 +1718,7 @@ func (o *Product) SetPricelist(ctx context.Context, exec boil.ContextExecutor, i
 		return errors.Wrap(err, "failed to update local table")
 	}
 
-	o.PricelistID = related.ID
+	queries.Assign(&o.PricelistID, related.ID)
 	if o.R == nil {
 		o.R = &productR{
 			Pricelist: related,
@@ -1620,6 +1735,37 @@ func (o *Product) SetPricelist(ctx context.Context, exec boil.ContextExecutor, i
 		related.R.Products = append(related.R.Products, o)
 	}
 
+	return nil
+}
+
+// RemovePricelist relationship.
+// Sets o.R.Pricelist to nil.
+// Removes o from all passed in related items' relationships struct (Optional).
+func (o *Product) RemovePricelist(ctx context.Context, exec boil.ContextExecutor, related *Pricelist) error {
+	var err error
+
+	queries.SetScanner(&o.PricelistID, nil)
+	if _, err = o.Update(ctx, exec, boil.Whitelist("pricelist_id")); err != nil {
+		return errors.Wrap(err, "failed to update local table")
+	}
+
+	o.R.Pricelist = nil
+	if related == nil || related.R == nil {
+		return nil
+	}
+
+	for i, ri := range related.R.Products {
+		if queries.Equal(o.PricelistID, ri.PricelistID) {
+			continue
+		}
+
+		ln := len(related.R.Products)
+		if ln > 1 && i < ln-1 {
+			related.R.Products[i] = related.R.Products[ln-1]
+		}
+		related.R.Products = related.R.Products[:ln-1]
+		break
+	}
 	return nil
 }
 
@@ -1952,6 +2098,59 @@ func (o *Product) RemoveOffers(ctx context.Context, exec boil.ContextExecutor, r
 		}
 	}
 
+	return nil
+}
+
+// AddRegistryRecommendations adds the given related objects to the existing relationships
+// of the product, optionally inserting them as new records.
+// Appends related to o.R.RegistryRecommendations.
+// Sets related.R.Product appropriately.
+func (o *Product) AddRegistryRecommendations(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*RegistryRecommendation) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.ProductID = o.ID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `registry_recommendations` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"product_id"}),
+				strmangle.WhereClause("`", "`", 0, registryRecommendationPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.ProductID = o.ID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &productR{
+			RegistryRecommendations: related,
+		}
+	} else {
+		o.R.RegistryRecommendations = append(o.R.RegistryRecommendations, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &registryRecommendationR{
+				Product: o,
+			}
+		} else {
+			rel.R.Product = o
+		}
+	}
 	return nil
 }
 

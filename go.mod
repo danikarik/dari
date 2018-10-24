@@ -18,6 +18,7 @@ require (
 	github.com/oklog/run v1.0.0
 	github.com/pkg/errors v0.8.0
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
+	github.com/satori/go.uuid v1.2.0
 	github.com/spf13/viper v1.2.1
 	github.com/temoto/robotstxt v0.0.0-20180810133444-97ee4a9ee6ea // indirect
 	github.com/uber-go/zap v1.9.1

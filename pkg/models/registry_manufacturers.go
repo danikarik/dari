@@ -27,6 +27,7 @@ type RegistryManufacturer struct {
 	RegistryID uint      `boil:"registry_id" json:"registry_id" toml:"registry_id" yaml:"registry_id"`
 	Title      string    `boil:"title" json:"title" toml:"title" yaml:"title"`
 	Country    string    `boil:"country" json:"country" toml:"country" yaml:"country"`
+	Type       string    `boil:"type" json:"type" toml:"type" yaml:"type"`
 	CreatedAt  null.Time `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	UpdatedAt  null.Time `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
@@ -39,6 +40,7 @@ var RegistryManufacturerColumns = struct {
 	RegistryID string
 	Title      string
 	Country    string
+	Type       string
 	CreatedAt  string
 	UpdatedAt  string
 }{
@@ -46,6 +48,7 @@ var RegistryManufacturerColumns = struct {
 	RegistryID: "registry_id",
 	Title:      "title",
 	Country:    "country",
+	Type:       "type",
 	CreatedAt:  "created_at",
 	UpdatedAt:  "updated_at",
 }
@@ -71,8 +74,8 @@ func (*registryManufacturerR) NewStruct() *registryManufacturerR {
 type registryManufacturerL struct{}
 
 var (
-	registryManufacturerColumns               = []string{"id", "registry_id", "title", "country", "created_at", "updated_at"}
-	registryManufacturerColumnsWithoutDefault = []string{"registry_id", "title", "country", "created_at", "updated_at"}
+	registryManufacturerColumns               = []string{"id", "registry_id", "title", "country", "type", "created_at", "updated_at"}
+	registryManufacturerColumnsWithoutDefault = []string{"registry_id", "title", "country", "type", "created_at", "updated_at"}
 	registryManufacturerColumnsWithDefault    = []string{"id"}
 	registryManufacturerPrimaryKeyColumns     = []string{"id"}
 )

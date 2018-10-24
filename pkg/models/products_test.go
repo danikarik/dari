@@ -649,6 +649,84 @@ func testProductToManyOffers(t *testing.T) {
 	}
 }
 
+func testProductToManyRegistryRecommendations(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Product
+	var b, c RegistryRecommendation
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, productDBTypes, true, productColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Product struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, registryRecommendationDBTypes, false, registryRecommendationColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, registryRecommendationDBTypes, false, registryRecommendationColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	b.ProductID = a.ID
+	c.ProductID = a.ID
+
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	registryRecommendation, err := a.RegistryRecommendations().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range registryRecommendation {
+		if v.ProductID == b.ProductID {
+			bFound = true
+		}
+		if v.ProductID == c.ProductID {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := ProductSlice{&a}
+	if err = a.L.LoadRegistryRecommendations(ctx, tx, false, (*[]*Product)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryRecommendations); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.RegistryRecommendations = nil
+	if err = a.L.LoadRegistryRecommendations(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.RegistryRecommendations); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", registryRecommendation)
+	}
+}
+
 func testProductToManyAddOpDescriptions(t *testing.T) {
 	var err error
 
@@ -975,6 +1053,81 @@ func testProductToManyRemoveOpOffers(t *testing.T) {
 	}
 }
 
+func testProductToManyAddOpRegistryRecommendations(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Product
+	var b, c, d, e RegistryRecommendation
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*RegistryRecommendation{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, registryRecommendationDBTypes, false, strmangle.SetComplement(registryRecommendationPrimaryKeyColumns, registryRecommendationColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*RegistryRecommendation{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddRegistryRecommendations(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if a.ID != first.ProductID {
+			t.Error("foreign key was wrong value", a.ID, first.ProductID)
+		}
+		if a.ID != second.ProductID {
+			t.Error("foreign key was wrong value", a.ID, second.ProductID)
+		}
+
+		if first.R.Product != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.Product != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.RegistryRecommendations[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.RegistryRecommendations[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.RegistryRecommendations().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
 func testProductToOneCategoryUsingCategory(t *testing.T) {
 	ctx := context.Background()
 	tx := MustTx(boil.BeginTx(ctx, nil))
@@ -1188,7 +1341,7 @@ func testProductToOnePricelistUsingPricelist(t *testing.T) {
 	var foreign Pricelist
 
 	seed := randomize.NewSeed()
-	if err := randomize.Struct(seed, &local, productDBTypes, false, productColumnsWithDefault...); err != nil {
+	if err := randomize.Struct(seed, &local, productDBTypes, true, productColumnsWithDefault...); err != nil {
 		t.Errorf("Unable to randomize Product struct: %s", err)
 	}
 	if err := randomize.Struct(seed, &foreign, pricelistDBTypes, false, pricelistColumnsWithDefault...); err != nil {
@@ -1199,7 +1352,7 @@ func testProductToOnePricelistUsingPricelist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	local.PricelistID = foreign.ID
+	queries.Assign(&local.PricelistID, foreign.ID)
 	if err := local.Insert(ctx, tx, boil.Infer()); err != nil {
 		t.Fatal(err)
 	}
@@ -1209,7 +1362,7 @@ func testProductToOnePricelistUsingPricelist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if check.ID != foreign.ID {
+	if !queries.Equal(check.ID, foreign.ID) {
 		t.Errorf("want: %v, got %v", foreign.ID, check.ID)
 	}
 
@@ -1653,7 +1806,7 @@ func testProductToOneSetOpPricelistUsingPricelist(t *testing.T) {
 		if x.R.Products[0] != &a {
 			t.Error("failed to append to foreign relationship struct")
 		}
-		if a.PricelistID != x.ID {
+		if !queries.Equal(a.PricelistID, x.ID) {
 			t.Error("foreign key was wrong value", a.PricelistID)
 		}
 
@@ -1664,11 +1817,63 @@ func testProductToOneSetOpPricelistUsingPricelist(t *testing.T) {
 			t.Fatal("failed to reload", err)
 		}
 
-		if a.PricelistID != x.ID {
+		if !queries.Equal(a.PricelistID, x.ID) {
 			t.Error("foreign key was wrong value", a.PricelistID, x.ID)
 		}
 	}
 }
+
+func testProductToOneRemoveOpPricelistUsingPricelist(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Product
+	var b Pricelist
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, productDBTypes, false, strmangle.SetComplement(productPrimaryKeyColumns, productColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &b, pricelistDBTypes, false, strmangle.SetComplement(pricelistPrimaryKeyColumns, pricelistColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.SetPricelist(ctx, tx, true, &b); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = a.RemovePricelist(ctx, tx, &b); err != nil {
+		t.Error("failed to remove relationship")
+	}
+
+	count, err := a.Pricelist().Count(ctx, tx)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != 0 {
+		t.Error("want no relationships remaining")
+	}
+
+	if a.R.Pricelist != nil {
+		t.Error("R struct entry should be nil")
+	}
+
+	if !queries.IsValuerNil(a.PricelistID) {
+		t.Error("foreign key value should be nil")
+	}
+
+	if len(b.R.Products) != 0 {
+		t.Error("failed to remove a from b's relationships")
+	}
+}
+
 func testProductToOneSetOpRegistryUsingRegistry(t *testing.T) {
 	var err error
 
