@@ -23,15 +23,16 @@ import (
 
 // Pricelist is an object representing the database table.
 type Pricelist struct {
-	ID             uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	ListName       string    `boil:"list_name" json:"list_name" toml:"list_name" yaml:"list_name"`
-	ManufacturerID uint      `boil:"manufacturer_id" json:"manufacturer_id" toml:"manufacturer_id" yaml:"manufacturer_id"`
-	Year           int       `boil:"year" json:"year" toml:"year" yaml:"year"`
-	IsActive       bool      `boil:"is_active" json:"is_active" toml:"is_active" yaml:"is_active"`
-	IsArchive      bool      `boil:"is_archive" json:"is_archive" toml:"is_archive" yaml:"is_archive"`
-	UserID         uint      `boil:"user_id" json:"user_id" toml:"user_id" yaml:"user_id"`
-	CreatedAt      null.Time `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	UpdatedAt      null.Time `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	ID             uint        `boil:"id" json:"id" toml:"id" yaml:"id"`
+	ListName       string      `boil:"list_name" json:"list_name" toml:"list_name" yaml:"list_name"`
+	ManufacturerID uint        `boil:"manufacturer_id" json:"manufacturer_id" toml:"manufacturer_id" yaml:"manufacturer_id"`
+	IsArchive      bool        `boil:"is_archive" json:"is_archive" toml:"is_archive" yaml:"is_archive"`
+	UserID         uint        `boil:"user_id" json:"user_id" toml:"user_id" yaml:"user_id"`
+	File           null.String `boil:"file" json:"file,omitempty" toml:"file" yaml:"file,omitempty"`
+	StartDate      null.Time   `boil:"start_date" json:"start_date,omitempty" toml:"start_date" yaml:"start_date,omitempty"`
+	EndDate        null.Time   `boil:"end_date" json:"end_date,omitempty" toml:"end_date" yaml:"end_date,omitempty"`
+	CreatedAt      null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	UpdatedAt      null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
 	R *pricelistR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L pricelistL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -41,20 +42,22 @@ var PricelistColumns = struct {
 	ID             string
 	ListName       string
 	ManufacturerID string
-	Year           string
-	IsActive       string
 	IsArchive      string
 	UserID         string
+	File           string
+	StartDate      string
+	EndDate        string
 	CreatedAt      string
 	UpdatedAt      string
 }{
 	ID:             "id",
 	ListName:       "list_name",
 	ManufacturerID: "manufacturer_id",
-	Year:           "year",
-	IsActive:       "is_active",
 	IsArchive:      "is_archive",
 	UserID:         "user_id",
+	File:           "file",
+	StartDate:      "start_date",
+	EndDate:        "end_date",
 	CreatedAt:      "created_at",
 	UpdatedAt:      "updated_at",
 }
@@ -86,9 +89,9 @@ func (*pricelistR) NewStruct() *pricelistR {
 type pricelistL struct{}
 
 var (
-	pricelistColumns               = []string{"id", "list_name", "manufacturer_id", "year", "is_active", "is_archive", "user_id", "created_at", "updated_at"}
-	pricelistColumnsWithoutDefault = []string{"list_name", "manufacturer_id", "year", "user_id", "created_at", "updated_at"}
-	pricelistColumnsWithDefault    = []string{"id", "is_active", "is_archive"}
+	pricelistColumns               = []string{"id", "list_name", "manufacturer_id", "is_archive", "user_id", "file", "start_date", "end_date", "created_at", "updated_at"}
+	pricelistColumnsWithoutDefault = []string{"list_name", "manufacturer_id", "user_id", "file", "start_date", "end_date", "created_at", "updated_at"}
+	pricelistColumnsWithDefault    = []string{"id", "is_archive"}
 	pricelistPrimaryKeyColumns     = []string{"id"}
 )
 

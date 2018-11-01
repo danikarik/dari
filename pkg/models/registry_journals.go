@@ -23,43 +23,46 @@ import (
 
 // RegistryJournal is an object representing the database table.
 type RegistryJournal struct {
-	ID              uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
-	UserID          null.Uint `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
-	TotalCount      uint      `boil:"total_count" json:"total_count" toml:"total_count" yaml:"total_count"`
-	FailedCount     uint      `boil:"failed_count" json:"failed_count" toml:"failed_count" yaml:"failed_count"`
-	InsertedCount   uint      `boil:"inserted_count" json:"inserted_count" toml:"inserted_count" yaml:"inserted_count"`
-	UpdatedCount    uint      `boil:"updated_count" json:"updated_count" toml:"updated_count" yaml:"updated_count"`
-	DeletedCount    uint      `boil:"deleted_count" json:"deleted_count" toml:"deleted_count" yaml:"deleted_count"`
-	ProcessStatusID uint      `boil:"process_status_id" json:"process_status_id" toml:"process_status_id" yaml:"process_status_id"`
-	StartedAt       time.Time `boil:"started_at" json:"started_at" toml:"started_at" yaml:"started_at"`
-	FinishedAt      null.Time `boil:"finished_at" json:"finished_at,omitempty" toml:"finished_at" yaml:"finished_at,omitempty"`
+	ID                 uint      `boil:"id" json:"id" toml:"id" yaml:"id"`
+	UserID             null.Uint `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
+	TotalCount         uint      `boil:"total_count" json:"total_count" toml:"total_count" yaml:"total_count"`
+	FailedCount        uint      `boil:"failed_count" json:"failed_count" toml:"failed_count" yaml:"failed_count"`
+	DoubleVisitedCount uint      `boil:"double_visited_count" json:"double_visited_count" toml:"double_visited_count" yaml:"double_visited_count"`
+	InsertedCount      uint      `boil:"inserted_count" json:"inserted_count" toml:"inserted_count" yaml:"inserted_count"`
+	UpdatedCount       uint      `boil:"updated_count" json:"updated_count" toml:"updated_count" yaml:"updated_count"`
+	DeletedCount       uint      `boil:"deleted_count" json:"deleted_count" toml:"deleted_count" yaml:"deleted_count"`
+	ProcessStatusID    uint      `boil:"process_status_id" json:"process_status_id" toml:"process_status_id" yaml:"process_status_id"`
+	StartedAt          time.Time `boil:"started_at" json:"started_at" toml:"started_at" yaml:"started_at"`
+	FinishedAt         null.Time `boil:"finished_at" json:"finished_at,omitempty" toml:"finished_at" yaml:"finished_at,omitempty"`
 
 	R *registryJournalR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L registryJournalL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var RegistryJournalColumns = struct {
-	ID              string
-	UserID          string
-	TotalCount      string
-	FailedCount     string
-	InsertedCount   string
-	UpdatedCount    string
-	DeletedCount    string
-	ProcessStatusID string
-	StartedAt       string
-	FinishedAt      string
+	ID                 string
+	UserID             string
+	TotalCount         string
+	FailedCount        string
+	DoubleVisitedCount string
+	InsertedCount      string
+	UpdatedCount       string
+	DeletedCount       string
+	ProcessStatusID    string
+	StartedAt          string
+	FinishedAt         string
 }{
-	ID:              "id",
-	UserID:          "user_id",
-	TotalCount:      "total_count",
-	FailedCount:     "failed_count",
-	InsertedCount:   "inserted_count",
-	UpdatedCount:    "updated_count",
-	DeletedCount:    "deleted_count",
-	ProcessStatusID: "process_status_id",
-	StartedAt:       "started_at",
-	FinishedAt:      "finished_at",
+	ID:                 "id",
+	UserID:             "user_id",
+	TotalCount:         "total_count",
+	FailedCount:        "failed_count",
+	DoubleVisitedCount: "double_visited_count",
+	InsertedCount:      "inserted_count",
+	UpdatedCount:       "updated_count",
+	DeletedCount:       "deleted_count",
+	ProcessStatusID:    "process_status_id",
+	StartedAt:          "started_at",
+	FinishedAt:         "finished_at",
 }
 
 // RegistryJournalRels is where relationship names are stored.
@@ -89,9 +92,9 @@ func (*registryJournalR) NewStruct() *registryJournalR {
 type registryJournalL struct{}
 
 var (
-	registryJournalColumns               = []string{"id", "user_id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "process_status_id", "started_at", "finished_at"}
+	registryJournalColumns               = []string{"id", "user_id", "total_count", "failed_count", "double_visited_count", "inserted_count", "updated_count", "deleted_count", "process_status_id", "started_at", "finished_at"}
 	registryJournalColumnsWithoutDefault = []string{"user_id", "process_status_id", "finished_at"}
-	registryJournalColumnsWithDefault    = []string{"id", "total_count", "failed_count", "inserted_count", "updated_count", "deleted_count", "started_at"}
+	registryJournalColumnsWithDefault    = []string{"id", "total_count", "failed_count", "double_visited_count", "inserted_count", "updated_count", "deleted_count", "started_at"}
 	registryJournalPrimaryKeyColumns     = []string{"id"}
 )
 

@@ -1048,7 +1048,7 @@ func testOffersSelect(t *testing.T) {
 }
 
 var (
-	offerDBTypes = map[string]string{`AdditionalServices`: `text`, `CreatedAt`: `timestamp`, `CustomerID`: `int`, `DeliveryConditions`: `text`, `DeliveryTime`: `int`, `Description`: `longtext`, `ExpireDate`: `date`, `FinalPrice`: `decimal`, `Guarantee`: `int`, `ID`: `int`, `IsArchive`: `tinyint`, `ProductID`: `int`, `Subject`: `varchar`, `UpdatedAt`: `timestamp`, `UserID`: `int`}
+	offerDBTypes = map[string]string{`AdditionalServices`: `text`, `BuildID`: `int`, `BuildQuantity`: `int`, `CreatedAt`: `timestamp`, `CustomerID`: `int`, `DeliveryConditions`: `text`, `DeliveryTime`: `int`, `Description`: `longtext`, `ExpireDate`: `date`, `FinalPrice`: `decimal`, `Guarantee`: `int`, `ID`: `int`, `IsArchive`: `tinyint`, `ProductID`: `int`, `Subject`: `varchar`, `UpdatedAt`: `timestamp`, `UserID`: `int`}
 	_            = bytes.MinRead
 )
 

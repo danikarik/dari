@@ -37,6 +37,8 @@ type Offer struct {
 	UserID             null.Uint     `boil:"user_id" json:"user_id,omitempty" toml:"user_id" yaml:"user_id,omitempty"`
 	FinalPrice         types.Decimal `boil:"final_price" json:"final_price" toml:"final_price" yaml:"final_price"`
 	IsArchive          bool          `boil:"is_archive" json:"is_archive" toml:"is_archive" yaml:"is_archive"`
+	BuildID            int           `boil:"build_id" json:"build_id" toml:"build_id" yaml:"build_id"`
+	BuildQuantity      int           `boil:"build_quantity" json:"build_quantity" toml:"build_quantity" yaml:"build_quantity"`
 	CreatedAt          null.Time     `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	UpdatedAt          null.Time     `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
@@ -58,6 +60,8 @@ var OfferColumns = struct {
 	UserID             string
 	FinalPrice         string
 	IsArchive          string
+	BuildID            string
+	BuildQuantity      string
 	CreatedAt          string
 	UpdatedAt          string
 }{
@@ -74,6 +78,8 @@ var OfferColumns = struct {
 	UserID:             "user_id",
 	FinalPrice:         "final_price",
 	IsArchive:          "is_archive",
+	BuildID:            "build_id",
+	BuildQuantity:      "build_quantity",
 	CreatedAt:          "created_at",
 	UpdatedAt:          "updated_at",
 }
@@ -105,8 +111,8 @@ func (*offerR) NewStruct() *offerR {
 type offerL struct{}
 
 var (
-	offerColumns               = []string{"id", "subject", "product_id", "description", "delivery_time", "delivery_conditions", "additional_services", "guarantee", "expire_date", "customer_id", "user_id", "final_price", "is_archive", "created_at", "updated_at"}
-	offerColumnsWithoutDefault = []string{"subject", "product_id", "description", "delivery_time", "delivery_conditions", "additional_services", "guarantee", "expire_date", "customer_id", "user_id", "final_price", "created_at", "updated_at"}
+	offerColumns               = []string{"id", "subject", "product_id", "description", "delivery_time", "delivery_conditions", "additional_services", "guarantee", "expire_date", "customer_id", "user_id", "final_price", "is_archive", "build_id", "build_quantity", "created_at", "updated_at"}
+	offerColumnsWithoutDefault = []string{"subject", "product_id", "description", "delivery_time", "delivery_conditions", "additional_services", "guarantee", "expire_date", "customer_id", "user_id", "final_price", "build_id", "build_quantity", "created_at", "updated_at"}
 	offerColumnsWithDefault    = []string{"id", "is_archive"}
 	offerPrimaryKeyColumns     = []string{"id"}
 )

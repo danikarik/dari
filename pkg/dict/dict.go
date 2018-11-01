@@ -44,13 +44,10 @@ const (
 	Model = 2
 )
 
-// Status specifies result of action.
-type Status int
-
 const (
 	_ = iota
 	// Processing means "В обработке"
-	Processing Status = iota
+	Processing uint = iota
 	// Failed means "Ошибка при записи"
 	Failed
 	// Inserted means "Новая запись"
@@ -61,6 +58,8 @@ const (
 	Deleted
 	// ParsingFailed means "Ошибка при чтении веб-страницы"
 	ParsingFailed
+	// AlreadyVisited means "Дублирование страницы"
+	AlreadyVisited
 )
 
 const (

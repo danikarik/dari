@@ -1,12 +1,12 @@
 package parser
 
 import (
-	"bitbucket.org/kit-systems/dari/pkg/compare"
 	"encoding/xml"
 	"fmt"
 	"strconv"
 	"time"
-
+	
+	"bitbucket.org/kit-systems/dari/pkg/compare"
 	"bitbucket.org/kit-systems/dari/pkg/database"
 	"bitbucket.org/kit-systems/dari/pkg/dict"
 	"bitbucket.org/kit-systems/dari/pkg/models"
@@ -67,8 +67,9 @@ func (p *Parser) Run() error {
 			var ok bool
 			err, ok = r.(error)
 			if !ok {
-				err = fmt.Errorf("run: %v", r)
+				err = fmt.Errorf("%v", r)
 			}
+			p.logger.Error("recover: %v", zap.Error(err))
 		}
 	}()
 
@@ -127,6 +128,7 @@ func (p *Parser) Single(ID string) error {
 	p.meta.Records = "1"
 	p.startBar(1, "Reading single page...")
 	rec, err := p.visitPrint(ID)
+	p.addRegistry(rec)
 	p.incrementBar()
 	if err != nil {
 		rec.RegistryStatusID = uint(dict.ParsingFailed)
@@ -246,19 +248,22 @@ func (p *Parser) collectRecords() error {
 		rec, err := p.visitPrint(r.ID)
 		p.incrementBar()
 		if err != nil {
-			if rec != nil {
+			if compare.URLVisited(err) {
+				p.journal.DoubleVisitedCount++
+				rec.RegistryStatusID = uint(dict.AlreadyVisited)
+			} else {
+				p.journal.FailedCount++
 				rec.RegistryStatusID = uint(dict.ParsingFailed)
 			}
-			p.journal.FailedCount++
 			p.logger.Error(
 				"registry",
 				zap.String("link", rec.Link),
-				zap.String("number", rec.Number),
 				zap.Error(err),
 			)
 		}
+		p.addRegistry(rec)
 	}
-	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", total, p.journal.FailedCount))
+	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d, Doubled: %d", total, p.journal.FailedCount, p.journal.DoubleVisitedCount))
 	return nil
 }
 
@@ -278,30 +283,26 @@ func (p *Parser) visitPage(page int) error {
 
 func (p *Parser) visitPrint(ID string) (*models.Registry, error) {
 	var result error
+	var r models.Registry
+
+	r.Link = p.pages.Main + p.pages.Print + ID
+	r.RegistryStatusID = uint(dict.Processing)
+
 	rowid, err := strconv.ParseUint(ID, 10, 0)
 	if err != nil {
-		return nil, err
+		return &r, err
 	}
-	var r models.Registry
 	r.ID = uint(rowid)
-	r.RegistryStatusID = uint(dict.Processing)
-	if err != nil {
-		return nil, err
-	}
+	
 	c := p.collector.Clone()
-	url := p.pages.Main + p.pages.Print + ID
-	r.Link = url
 	c.OnError(func(r *colly.Response, err error) {
 		p.onError(r, err)
 	})
 	c.OnHTML("body", func(e *colly.HTMLElement) {
 		result = parsePage(&r, e)
 	})
-	c.OnScraped(func(resp *colly.Response) {
-		p.addRegistry(&r)
-	})
-	if err = c.Visit(url); err != nil {
-		return nil, err
+	if err = c.Visit(r.Link); err != nil {
+		return &r, err
 	}
 	return &r, result
 }

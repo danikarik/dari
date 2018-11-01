@@ -12,6 +12,7 @@ import "testing"
 // It does NOT run each operation group in parallel.
 // Separating the tests thusly grants avoidance of Postgres deadlocks.
 func TestParent(t *testing.T) {
+	t.Run("Builds", testBuilds)
 	t.Run("Categories", testCategories)
 	t.Run("Countries", testCountries)
 	t.Run("Currencies", testCurrencies)
@@ -40,6 +41,7 @@ func TestParent(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Run("Builds", testBuildsDelete)
 	t.Run("Categories", testCategoriesDelete)
 	t.Run("Countries", testCountriesDelete)
 	t.Run("Currencies", testCurrenciesDelete)
@@ -68,6 +70,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestQueryDeleteAll(t *testing.T) {
+	t.Run("Builds", testBuildsQueryDeleteAll)
 	t.Run("Categories", testCategoriesQueryDeleteAll)
 	t.Run("Countries", testCountriesQueryDeleteAll)
 	t.Run("Currencies", testCurrenciesQueryDeleteAll)
@@ -96,6 +99,7 @@ func TestQueryDeleteAll(t *testing.T) {
 }
 
 func TestSliceDeleteAll(t *testing.T) {
+	t.Run("Builds", testBuildsSliceDeleteAll)
 	t.Run("Categories", testCategoriesSliceDeleteAll)
 	t.Run("Countries", testCountriesSliceDeleteAll)
 	t.Run("Currencies", testCurrenciesSliceDeleteAll)
@@ -124,6 +128,7 @@ func TestSliceDeleteAll(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
+	t.Run("Builds", testBuildsExists)
 	t.Run("Categories", testCategoriesExists)
 	t.Run("Countries", testCountriesExists)
 	t.Run("Currencies", testCurrenciesExists)
@@ -152,6 +157,7 @@ func TestExists(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
+	t.Run("Builds", testBuildsFind)
 	t.Run("Categories", testCategoriesFind)
 	t.Run("Countries", testCountriesFind)
 	t.Run("Currencies", testCurrenciesFind)
@@ -180,6 +186,7 @@ func TestFind(t *testing.T) {
 }
 
 func TestBind(t *testing.T) {
+	t.Run("Builds", testBuildsBind)
 	t.Run("Categories", testCategoriesBind)
 	t.Run("Countries", testCountriesBind)
 	t.Run("Currencies", testCurrenciesBind)
@@ -208,6 +215,7 @@ func TestBind(t *testing.T) {
 }
 
 func TestOne(t *testing.T) {
+	t.Run("Builds", testBuildsOne)
 	t.Run("Categories", testCategoriesOne)
 	t.Run("Countries", testCountriesOne)
 	t.Run("Currencies", testCurrenciesOne)
@@ -236,6 +244,7 @@ func TestOne(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
+	t.Run("Builds", testBuildsAll)
 	t.Run("Categories", testCategoriesAll)
 	t.Run("Countries", testCountriesAll)
 	t.Run("Currencies", testCurrenciesAll)
@@ -264,6 +273,7 @@ func TestAll(t *testing.T) {
 }
 
 func TestCount(t *testing.T) {
+	t.Run("Builds", testBuildsCount)
 	t.Run("Categories", testCategoriesCount)
 	t.Run("Countries", testCountriesCount)
 	t.Run("Currencies", testCurrenciesCount)
@@ -292,6 +302,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestHooks(t *testing.T) {
+	t.Run("Builds", testBuildsHooks)
 	t.Run("Categories", testCategoriesHooks)
 	t.Run("Countries", testCountriesHooks)
 	t.Run("Currencies", testCurrenciesHooks)
@@ -320,6 +331,8 @@ func TestHooks(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
+	t.Run("Builds", testBuildsInsert)
+	t.Run("Builds", testBuildsInsertWhitelist)
 	t.Run("Categories", testCategoriesInsert)
 	t.Run("Categories", testCategoriesInsertWhitelist)
 	t.Run("Countries", testCountriesInsert)
@@ -375,6 +388,7 @@ func TestInsert(t *testing.T) {
 // TestToOne tests cannot be run in parallel
 // or deadlocks can occur.
 func TestToOne(t *testing.T) {
+	t.Run("BuildToProductUsingProduct", testBuildToOneProductUsingProduct)
 	t.Run("DescriptionToProductUsingProduct", testDescriptionToOneProductUsingProduct)
 	t.Run("DiscountToCategoryUsingCategory", testDiscountToOneCategoryUsingCategory)
 	t.Run("DiscountToManufacturerUsingManufacturer", testDiscountToOneManufacturerUsingManufacturer)
@@ -426,6 +440,7 @@ func TestToMany(t *testing.T) {
 	t.Run("MaterialToProducts", testMaterialToManyProducts)
 	t.Run("PricelistToProducts", testPricelistToManyProducts)
 	t.Run("ProcessStatusToRegistryJournals", testProcessStatusToManyRegistryJournals)
+	t.Run("ProductToBuilds", testProductToManyBuilds)
 	t.Run("ProductToDescriptions", testProductToManyDescriptions)
 	t.Run("ProductToOffers", testProductToManyOffers)
 	t.Run("ProductToRegistryRecommendations", testProductToManyRegistryRecommendations)
@@ -447,6 +462,7 @@ func TestToMany(t *testing.T) {
 // TestToOneSet tests cannot be run in parallel
 // or deadlocks can occur.
 func TestToOneSet(t *testing.T) {
+	t.Run("BuildToProductUsingBuilds", testBuildToOneSetOpProductUsingProduct)
 	t.Run("DescriptionToProductUsingDescriptions", testDescriptionToOneSetOpProductUsingProduct)
 	t.Run("DiscountToCategoryUsingDiscounts", testDiscountToOneSetOpCategoryUsingCategory)
 	t.Run("DiscountToManufacturerUsingDiscounts", testDiscountToOneSetOpManufacturerUsingManufacturer)
@@ -481,6 +497,7 @@ func TestToOneSet(t *testing.T) {
 // TestToOneRemove tests cannot be run in parallel
 // or deadlocks can occur.
 func TestToOneRemove(t *testing.T) {
+	t.Run("BuildToProductUsingBuilds", testBuildToOneRemoveOpProductUsingProduct)
 	t.Run("DiscountToSubcategoryUsingDiscounts", testDiscountToOneRemoveOpSubcategoryUsingSubcategory)
 	t.Run("ManufacturerToCurrencyUsingManufacturers", testManufacturerToOneRemoveOpCurrencyUsingCurrency)
 	t.Run("OfferToCustomerUsingOffers", testOfferToOneRemoveOpCustomerUsingCustomer)
@@ -518,6 +535,7 @@ func TestToManyAdd(t *testing.T) {
 	t.Run("MaterialToProducts", testMaterialToManyAddOpProducts)
 	t.Run("PricelistToProducts", testPricelistToManyAddOpProducts)
 	t.Run("ProcessStatusToRegistryJournals", testProcessStatusToManyAddOpRegistryJournals)
+	t.Run("ProductToBuilds", testProductToManyAddOpBuilds)
 	t.Run("ProductToDescriptions", testProductToManyAddOpDescriptions)
 	t.Run("ProductToOffers", testProductToManyAddOpOffers)
 	t.Run("ProductToRegistryRecommendations", testProductToManyAddOpRegistryRecommendations)
@@ -543,6 +561,7 @@ func TestToManySet(t *testing.T) {
 	t.Run("CustomerToOffers", testCustomerToManySetOpOffers)
 	t.Run("MaterialToProducts", testMaterialToManySetOpProducts)
 	t.Run("PricelistToProducts", testPricelistToManySetOpProducts)
+	t.Run("ProductToBuilds", testProductToManySetOpBuilds)
 	t.Run("ProductToOffers", testProductToManySetOpOffers)
 	t.Run("RegistryToProducts", testRegistryToManySetOpProducts)
 	t.Run("RegistryToRegistryFieldStats", testRegistryToManySetOpRegistryFieldStats)
@@ -559,6 +578,7 @@ func TestToManyRemove(t *testing.T) {
 	t.Run("CustomerToOffers", testCustomerToManyRemoveOpOffers)
 	t.Run("MaterialToProducts", testMaterialToManyRemoveOpProducts)
 	t.Run("PricelistToProducts", testPricelistToManyRemoveOpProducts)
+	t.Run("ProductToBuilds", testProductToManyRemoveOpBuilds)
 	t.Run("ProductToOffers", testProductToManyRemoveOpOffers)
 	t.Run("RegistryToProducts", testRegistryToManyRemoveOpProducts)
 	t.Run("RegistryToRegistryFieldStats", testRegistryToManyRemoveOpRegistryFieldStats)
@@ -569,6 +589,7 @@ func TestToManyRemove(t *testing.T) {
 }
 
 func TestReload(t *testing.T) {
+	t.Run("Builds", testBuildsReload)
 	t.Run("Categories", testCategoriesReload)
 	t.Run("Countries", testCountriesReload)
 	t.Run("Currencies", testCurrenciesReload)
@@ -597,6 +618,7 @@ func TestReload(t *testing.T) {
 }
 
 func TestReloadAll(t *testing.T) {
+	t.Run("Builds", testBuildsReloadAll)
 	t.Run("Categories", testCategoriesReloadAll)
 	t.Run("Countries", testCountriesReloadAll)
 	t.Run("Currencies", testCurrenciesReloadAll)
@@ -625,6 +647,7 @@ func TestReloadAll(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
+	t.Run("Builds", testBuildsSelect)
 	t.Run("Categories", testCategoriesSelect)
 	t.Run("Countries", testCountriesSelect)
 	t.Run("Currencies", testCurrenciesSelect)
@@ -653,6 +676,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
+	t.Run("Builds", testBuildsUpdate)
 	t.Run("Categories", testCategoriesUpdate)
 	t.Run("Countries", testCountriesUpdate)
 	t.Run("Currencies", testCurrenciesUpdate)
@@ -681,6 +705,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestSliceUpdateAll(t *testing.T) {
+	t.Run("Builds", testBuildsSliceUpdateAll)
 	t.Run("Categories", testCategoriesSliceUpdateAll)
 	t.Run("Countries", testCountriesSliceUpdateAll)
 	t.Run("Currencies", testCurrenciesSliceUpdateAll)

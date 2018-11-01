@@ -23,28 +23,37 @@ import (
 
 // Customer is an object representing the database table.
 type Customer struct {
-	ID        uint        `boil:"id" json:"id" toml:"id" yaml:"id"`
-	Name      string      `boil:"name" json:"name" toml:"name" yaml:"name"`
-	Address   null.String `boil:"address" json:"address,omitempty" toml:"address" yaml:"address,omitempty"`
-	CreatedAt null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	UpdatedAt null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	ID          uint        `boil:"id" json:"id" toml:"id" yaml:"id"`
+	Name        string      `boil:"name" json:"name" toml:"name" yaml:"name"`
+	Address     null.String `boil:"address" json:"address,omitempty" toml:"address" yaml:"address,omitempty"`
+	Iin         null.String `boil:"iin" json:"iin,omitempty" toml:"iin" yaml:"iin,omitempty"`
+	Email       null.String `boil:"email" json:"email,omitempty" toml:"email" yaml:"email,omitempty"`
+	BankDetails null.String `boil:"bank_details" json:"bank_details,omitempty" toml:"bank_details" yaml:"bank_details,omitempty"`
+	CreatedAt   null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	UpdatedAt   null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
 	R *customerR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L customerL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var CustomerColumns = struct {
-	ID        string
-	Name      string
-	Address   string
-	CreatedAt string
-	UpdatedAt string
+	ID          string
+	Name        string
+	Address     string
+	Iin         string
+	Email       string
+	BankDetails string
+	CreatedAt   string
+	UpdatedAt   string
 }{
-	ID:        "id",
-	Name:      "name",
-	Address:   "address",
-	CreatedAt: "created_at",
-	UpdatedAt: "updated_at",
+	ID:          "id",
+	Name:        "name",
+	Address:     "address",
+	Iin:         "iin",
+	Email:       "email",
+	BankDetails: "bank_details",
+	CreatedAt:   "created_at",
+	UpdatedAt:   "updated_at",
 }
 
 // CustomerRels is where relationship names are stored.
@@ -68,8 +77,8 @@ func (*customerR) NewStruct() *customerR {
 type customerL struct{}
 
 var (
-	customerColumns               = []string{"id", "name", "address", "created_at", "updated_at"}
-	customerColumnsWithoutDefault = []string{"name", "address", "created_at", "updated_at"}
+	customerColumns               = []string{"id", "name", "address", "iin", "email", "bank_details", "created_at", "updated_at"}
+	customerColumnsWithoutDefault = []string{"name", "address", "iin", "email", "bank_details", "created_at", "updated_at"}
 	customerColumnsWithDefault    = []string{"id"}
 	customerPrimaryKeyColumns     = []string{"id"}
 )

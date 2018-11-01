@@ -26,8 +26,6 @@ import (
 type Product struct {
 	ID             uint          `boil:"id" json:"id" toml:"id" yaml:"id"`
 	PricelistID    null.Uint     `boil:"pricelist_id" json:"pricelist_id,omitempty" toml:"pricelist_id" yaml:"pricelist_id,omitempty"`
-	RegistryLink   null.String   `boil:"registry_link" json:"registry_link,omitempty" toml:"registry_link" yaml:"registry_link,omitempty"`
-	ActualDate     null.Int      `boil:"actual_date" json:"actual_date,omitempty" toml:"actual_date" yaml:"actual_date,omitempty"`
 	PartNumber     null.String   `boil:"part_number" json:"part_number,omitempty" toml:"part_number" yaml:"part_number,omitempty"`
 	BaseName       string        `boil:"base_name" json:"base_name" toml:"base_name" yaml:"base_name"`
 	ModelNumber    string        `boil:"model_number" json:"model_number" toml:"model_number" yaml:"model_number"`
@@ -49,8 +47,6 @@ type Product struct {
 var ProductColumns = struct {
 	ID             string
 	PricelistID    string
-	RegistryLink   string
-	ActualDate     string
 	PartNumber     string
 	BaseName       string
 	ModelNumber    string
@@ -67,8 +63,6 @@ var ProductColumns = struct {
 }{
 	ID:             "id",
 	PricelistID:    "pricelist_id",
-	RegistryLink:   "registry_link",
-	ActualDate:     "actual_date",
 	PartNumber:     "part_number",
 	BaseName:       "base_name",
 	ModelNumber:    "model_number",
@@ -93,6 +87,7 @@ var ProductRels = struct {
 	Pricelist               string
 	Registry                string
 	Subcategory             string
+	Builds                  string
 	Descriptions            string
 	Offers                  string
 	RegistryRecommendations string
@@ -104,6 +99,7 @@ var ProductRels = struct {
 	Pricelist:               "Pricelist",
 	Registry:                "Registry",
 	Subcategory:             "Subcategory",
+	Builds:                  "Builds",
 	Descriptions:            "Descriptions",
 	Offers:                  "Offers",
 	RegistryRecommendations: "RegistryRecommendations",
@@ -118,6 +114,7 @@ type productR struct {
 	Pricelist               *Pricelist
 	Registry                *Registry
 	Subcategory             *Subcategory
+	Builds                  BuildSlice
 	Descriptions            DescriptionSlice
 	Offers                  OfferSlice
 	RegistryRecommendations RegistryRecommendationSlice
@@ -132,8 +129,8 @@ func (*productR) NewStruct() *productR {
 type productL struct{}
 
 var (
-	productColumns               = []string{"id", "pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
-	productColumnsWithoutDefault = []string{"pricelist_id", "registry_link", "actual_date", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
+	productColumns               = []string{"id", "pricelist_id", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
+	productColumnsWithoutDefault = []string{"pricelist_id", "part_number", "base_name", "model_number", "base_price", "currency_id", "manufacturer_id", "category_id", "subcategory_id", "material_id", "registry_id", "created_at", "updated_at", "deleted_at"}
 	productColumnsWithDefault    = []string{"id"}
 	productPrimaryKeyColumns     = []string{"id"}
 )
@@ -467,6 +464,27 @@ func (o *Product) Subcategory(mods ...qm.QueryMod) subcategoryQuery {
 
 	query := Subcategories(queryMods...)
 	queries.SetFrom(query.Query, "`subcategories`")
+
+	return query
+}
+
+// Builds retrieves all the build's Builds with an executor.
+func (o *Product) Builds(mods ...qm.QueryMod) buildQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("`builds`.`product_id`=?", o.ID),
+	)
+
+	query := Builds(queryMods...)
+	queries.SetFrom(query.Query, "`builds`")
+
+	if len(queries.GetSelect(query.Query)) == 0 {
+		queries.SetSelect(query.Query, []string{"`builds`.*"})
+	}
 
 	return query
 }
@@ -1199,6 +1217,97 @@ func (productL) LoadSubcategory(ctx context.Context, e boil.ContextExecutor, sin
 	return nil
 }
 
+// LoadBuilds allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (productL) LoadBuilds(ctx context.Context, e boil.ContextExecutor, singular bool, maybeProduct interface{}, mods queries.Applicator) error {
+	var slice []*Product
+	var object *Product
+
+	if singular {
+		object = maybeProduct.(*Product)
+	} else {
+		slice = *maybeProduct.(*[]*Product)
+	}
+
+	args := make([]interface{}, 0, 1)
+	if singular {
+		if object.R == nil {
+			object.R = &productR{}
+		}
+		args = append(args, object.ID)
+	} else {
+	Outer:
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &productR{}
+			}
+
+			for _, a := range args {
+				if queries.Equal(a, obj.ID) {
+					continue Outer
+				}
+			}
+
+			args = append(args, obj.ID)
+		}
+	}
+
+	query := NewQuery(qm.From(`builds`), qm.WhereIn(`product_id in ?`, args...))
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load builds")
+	}
+
+	var resultSlice []*Build
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice builds")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on builds")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for builds")
+	}
+
+	if len(buildAfterSelectHooks) != 0 {
+		for _, obj := range resultSlice {
+			if err := obj.doAfterSelectHooks(ctx, e); err != nil {
+				return err
+			}
+		}
+	}
+	if singular {
+		object.R.Builds = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &buildR{}
+			}
+			foreign.R.Product = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if queries.Equal(local.ID, foreign.ProductID) {
+				local.R.Builds = append(local.R.Builds, foreign)
+				if foreign.R == nil {
+					foreign.R = &buildR{}
+				}
+				foreign.R.Product = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // LoadDescriptions allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
 func (productL) LoadDescriptions(ctx context.Context, e boil.ContextExecutor, singular bool, maybeProduct interface{}, mods queries.Applicator) error {
@@ -1922,6 +2031,129 @@ func (o *Product) RemoveSubcategory(ctx context.Context, exec boil.ContextExecut
 		related.R.Products = related.R.Products[:ln-1]
 		break
 	}
+	return nil
+}
+
+// AddBuilds adds the given related objects to the existing relationships
+// of the product, optionally inserting them as new records.
+// Appends related to o.R.Builds.
+// Sets related.R.Product appropriately.
+func (o *Product) AddBuilds(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Build) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			queries.Assign(&rel.ProductID, o.ID)
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE `builds` SET %s WHERE %s",
+				strmangle.SetParamNames("`", "`", 0, []string{"product_id"}),
+				strmangle.WhereClause("`", "`", 0, buildPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ID, rel.ID}
+
+			if boil.DebugMode {
+				fmt.Fprintln(boil.DebugWriter, updateQuery)
+				fmt.Fprintln(boil.DebugWriter, values)
+			}
+
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			queries.Assign(&rel.ProductID, o.ID)
+		}
+	}
+
+	if o.R == nil {
+		o.R = &productR{
+			Builds: related,
+		}
+	} else {
+		o.R.Builds = append(o.R.Builds, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &buildR{
+				Product: o,
+			}
+		} else {
+			rel.R.Product = o
+		}
+	}
+	return nil
+}
+
+// SetBuilds removes all previously related items of the
+// product replacing them completely with the passed
+// in related items, optionally inserting them as new records.
+// Sets o.R.Product's Builds accordingly.
+// Replaces o.R.Builds with related.
+// Sets related.R.Product's Builds accordingly.
+func (o *Product) SetBuilds(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*Build) error {
+	query := "update `builds` set `product_id` = null where `product_id` = ?"
+	values := []interface{}{o.ID}
+	if boil.DebugMode {
+		fmt.Fprintln(boil.DebugWriter, query)
+		fmt.Fprintln(boil.DebugWriter, values)
+	}
+
+	_, err := exec.ExecContext(ctx, query, values...)
+	if err != nil {
+		return errors.Wrap(err, "failed to remove relationships before set")
+	}
+
+	if o.R != nil {
+		for _, rel := range o.R.Builds {
+			queries.SetScanner(&rel.ProductID, nil)
+			if rel.R == nil {
+				continue
+			}
+
+			rel.R.Product = nil
+		}
+
+		o.R.Builds = nil
+	}
+	return o.AddBuilds(ctx, exec, insert, related...)
+}
+
+// RemoveBuilds relationships from objects passed in.
+// Removes related items from R.Builds (uses pointer comparison, removal does not keep order)
+// Sets related.R.Product.
+func (o *Product) RemoveBuilds(ctx context.Context, exec boil.ContextExecutor, related ...*Build) error {
+	var err error
+	for _, rel := range related {
+		queries.SetScanner(&rel.ProductID, nil)
+		if rel.R != nil {
+			rel.R.Product = nil
+		}
+		if _, err = rel.Update(ctx, exec, boil.Whitelist("product_id")); err != nil {
+			return err
+		}
+	}
+	if o.R == nil {
+		return nil
+	}
+
+	for _, rel := range related {
+		for i, ri := range o.R.Builds {
+			if rel != ri {
+				continue
+			}
+
+			ln := len(o.R.Builds)
+			if ln > 1 && i < ln-1 {
+				o.R.Builds[i] = o.R.Builds[ln-1]
+			}
+			o.R.Builds = o.R.Builds[:ln-1]
+			break
+		}
+	}
+
 	return nil
 }
 

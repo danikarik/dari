@@ -4,6 +4,7 @@
 package models
 
 var TableNames = struct {
+	Builds                  string
 	Categories              string
 	Countries               string
 	Currencies              string
@@ -30,6 +31,7 @@ var TableNames = struct {
 	Subcategories           string
 	Users                   string
 }{
+	Builds:                  "builds",
 	Categories:              "categories",
 	Countries:               "countries",
 	Currencies:              "currencies",

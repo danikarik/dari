@@ -1113,7 +1113,7 @@ func testPricelistsSelect(t *testing.T) {
 }
 
 var (
-	pricelistDBTypes = map[string]string{`CreatedAt`: `timestamp`, `ID`: `int`, `IsActive`: `tinyint`, `IsArchive`: `tinyint`, `ListName`: `varchar`, `ManufacturerID`: `int`, `UpdatedAt`: `timestamp`, `UserID`: `int`, `Year`: `int`}
+	pricelistDBTypes = map[string]string{`CreatedAt`: `timestamp`, `EndDate`: `date`, `File`: `varchar`, `ID`: `int`, `IsArchive`: `tinyint`, `ListName`: `varchar`, `ManufacturerID`: `int`, `StartDate`: `date`, `UpdatedAt`: `timestamp`, `UserID`: `int`}
 	_                = bytes.MinRead
 )
 

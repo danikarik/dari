@@ -19,3 +19,8 @@ func Int(old, new int) bool {
 func Date(old, new time.Time) bool {
 	return (old.Year() == new.Year()) && (old.YearDay() == new.YearDay())
 }
+
+// URLVisited checks if url has already been visited.
+func URLVisited(err error) bool {
+	return strings.Contains(err.Error(), "URL already visited")
+}

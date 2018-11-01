@@ -989,7 +989,7 @@ func testRegistryJournalsSelect(t *testing.T) {
 }
 
 var (
-	registryJournalDBTypes = map[string]string{`DeletedCount`: `int`, `FailedCount`: `int`, `FinishedAt`: `timestamp`, `ID`: `int`, `InsertedCount`: `int`, `ProcessStatusID`: `int`, `StartedAt`: `timestamp`, `TotalCount`: `int`, `UpdatedCount`: `int`, `UserID`: `int`}
+	registryJournalDBTypes = map[string]string{`DeletedCount`: `int`, `DoubleVisitedCount`: `int`, `FailedCount`: `int`, `FinishedAt`: `timestamp`, `ID`: `int`, `InsertedCount`: `int`, `ProcessStatusID`: `int`, `StartedAt`: `timestamp`, `TotalCount`: `int`, `UpdatedCount`: `int`, `UserID`: `int`}
 	_                      = bytes.MinRead
 )
 

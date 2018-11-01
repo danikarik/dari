@@ -95,7 +95,7 @@ func (p *Parser) compareRegistries(old *models.Registry, new *models.Registry) e
 	// Collecting changes.
 	var result *multierror.Error
 	for _, fs := range fss {
-		if err := p.db.InsertFieldStat(fs); err != nil {
+		if err := p.db.InsertFieldStat(fs, nil); err != nil {
 			result.Errors = append(result.Errors, err)
 		}
 	}
@@ -103,7 +103,23 @@ func (p *Parser) compareRegistries(old *models.Registry, new *models.Registry) e
 	return result.ErrorOrNil()
 }
 
-func (p *Parser) logFailed(r *models.Registry, err error) error {
+func (p *Parser) logFailed(r *models.Registry) error {
+	var err error
+
+	switch status := r.RegistryStatusID; status {
+	case dict.ParsingFailed:
+		err = fmt.Errorf("parsing failed")
+		break
+	case dict.AlreadyVisited:
+		err = fmt.Errorf("already visited")
+		break
+	case dict.Failed:
+		err = fmt.Errorf("failed records")
+		break
+	default:
+		break
+	}
+
 	fs := &models.RegistryFieldStat{
 		RegistryID:        null.NewUint(r.ID, true),
 		RegistryJournalID: p.journal.ID,
@@ -113,7 +129,8 @@ func (p *Parser) logFailed(r *models.Registry, err error) error {
 		ErrorMSG: 		   null.StringFrom(err.Error()),
 		CreatedAt:         time.Now(),
 	}
-	return p.db.InsertFieldStat(fs)
+
+	return p.db.InsertFieldStat(fs, r)
 }
 
 func (p *Parser) updateDatabase() error {
@@ -141,9 +158,11 @@ func (p *Parser) updateDatabase() error {
 	}
 	p.startBar(count, "Inserting / updating records...")
 	for _, r := range p.regs {
-		if r.RegistryStatusID == uint(dict.ParsingFailed) {
-			p.journal.FailedCount++
-			lerr := p.logFailed(r, fmt.Errorf("parsing failed"))
+		wrong := (r.RegistryStatusID == uint(dict.ParsingFailed)) ||
+				 (r.RegistryStatusID == uint(dict.AlreadyVisited))
+		
+		if wrong {
+			lerr := p.logFailed(r)
 			if lerr != nil {
 				p.logger.Error("field stat", zap.Error(lerr))
 			}
@@ -152,10 +171,10 @@ func (p *Parser) updateDatabase() error {
 		err := p.db.AddRegistry(r)
 		p.incrementBar()
 		if err != nil {
-			p.journal.FailedCount++
-			lerr := p.logFailed(r, err)
+			r.RegistryStatusID = dict.Failed
+			lerr := p.logFailed(r)
 			if lerr != nil {
-				p.logger.Error("failed records", zap.Error(lerr))
+				p.logger.Error("field stat", zap.Error(lerr))
 			}
 		} else {
 			if r.RegistryStatusID == uint(dict.Inserted) {
@@ -166,7 +185,7 @@ func (p *Parser) updateDatabase() error {
 			}
 		}
 	}
-	p.finishBar(fmt.Sprintf("Total: %d, Errors: %d", count, p.journal.FailedCount))
+	p.finishBar(fmt.Sprintf("Total: %d, Failed: %d, Doubled: %d", count, p.journal.FailedCount, p.journal.DoubleVisitedCount))
 	p.startBar(1, "Setting deleted status...")
 	err = p.db.MarkAsDeleted(p.regs)
 	p.incrementBar()
