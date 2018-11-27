@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"bitbucket.org/kit-systems/dari/pkg/models"
-	"github.com/hashicorp/go-multierror" 
+	"github.com/hashicorp/go-multierror"
+	"github.com/satori/go.uuid"
 	"github.com/volatiletech/null"
 	"github.com/volatiletech/sqlboiler/boil"
 	"github.com/volatiletech/sqlboiler/queries/qm"
-	"github.com/satori/go.uuid"
 )
 
 // FindProducts gets all products without registry id.
@@ -92,35 +92,37 @@ func (db *DB) CreateNotifications(prods models.ProductSlice) error {
 	if err != nil {
 		return err
 	}
-	for _, r := range rems {
-		rds = append(rds, r.RegistryID)
-	}
-	var regs models.RegistrySlice
-	regs, err = models.Registries(qm.WhereIn("id in ?", rds...), qm.Load("RegistryRecommendations")).All(db.ctx, db.conn)
-	if err != nil {
-		return err
-	}
-	for _, r := range regs {
-		_, err = models.Notifications(
-			qm.Where("type like ?", `%RecommendationFound`),
-			qm.And("notifiable_type like ?", `%Registry`),
-			qm.And("notifiable_id = ?", r.ID),
-		).DeleteAll(db.ctx, db.conn)
-		if err != nil {
-			continue
+	if len(rems) > 0 {
+		for _, r := range rems {
+			rds = append(rds, r.RegistryID)
 		}
-		note := models.Notification{
-			ID:             uuid.NewV4().String(),
-			Type:           `App\Notifications\RecommendationFound`,
-			NotifiableType: `App\Registry`,
-			NotifiableID:   uint64(r.ID),
-			Data:           fmt.Sprintf(`{"count":%d}`, len(r.R.RegistryRecommendations)),
-			CreatedAt:      null.TimeFrom(time.Now()),
-			UpdatedAt:      null.TimeFrom(time.Now()),
-		}
-		err = note.Insert(db.ctx, db.conn, boil.Infer())
+		var regs models.RegistrySlice
+		regs, err = models.Registries(qm.WhereIn("id in ?", rds...), qm.Load("RegistryRecommendations")).All(db.ctx, db.conn)
 		if err != nil {
-			continue
+			return err
+		}
+		for _, r := range regs {
+			_, err = models.Notifications(
+				qm.Where("type like ?", `%RecommendationFound`),
+				qm.And("notifiable_type like ?", `%Registry`),
+				qm.And("notifiable_id = ?", r.ID),
+			).DeleteAll(db.ctx, db.conn)
+			if err != nil {
+				continue
+			}
+			note := models.Notification{
+				ID:             uuid.NewV4().String(),
+				Type:           `App\Notifications\RecommendationFound`,
+				NotifiableType: `App\Registry`,
+				NotifiableID:   uint64(r.ID),
+				Data:           fmt.Sprintf(`{"count":%d}`, len(r.R.RegistryRecommendations)),
+				CreatedAt:      null.TimeFrom(time.Now()),
+				UpdatedAt:      null.TimeFrom(time.Now()),
+			}
+			err = note.Insert(db.ctx, db.conn, boil.Infer())
+			if err != nil {
+				continue
+			}
 		}
 	}
 	return nil
